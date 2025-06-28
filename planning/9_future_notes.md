@@ -1,0 +1,1 @@
+check out https://developers.google.com/books/docs/v1/performance for ways to optimize our google api calls, including gzip and field selections
