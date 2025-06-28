@@ -6,12 +6,20 @@ Primary interfaces:
 - GenreEnricher: Core single-book enrichment
 - CSVProcessor: Load books from Goodreads CSV
 - BookFeeder: Orchestrate batch processing
+
+Analytics interfaces:
+- AnalyticsCSVProcessor: Load comprehensive book data for dashboard analytics
+- BookAnalytics: Enhanced book model for time-series analysis
 """
 
 from .models import BookInfo, EnrichedBook
 from .genre_enricher import GenreEnricher
 from .csv_processor import CSVProcessor
 from .book_feeder import BookFeeder
+
+# Analytics components
+from .analytics_models import BookAnalytics, ReadingSession
+from .analytics_csv_processor import AnalyticsCSVProcessor
 
 # Legacy/internal components (available but not primary interface)
 from .api_caller import APICaller
@@ -26,6 +34,11 @@ __all__ = [
     "BookFeeder",
     "BookInfo",
     "EnrichedBook",
+    
+    # Analytics interface
+    "BookAnalytics",
+    "ReadingSession",
+    "AnalyticsCSVProcessor",
     
     # Internal components
     "APICaller",

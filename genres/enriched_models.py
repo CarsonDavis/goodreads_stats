@@ -5,7 +5,7 @@ Central data models for the Book Data Enrichment Pipeline.
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
-from ..api.models import BookInfo
+from .models import BookInfo
 
 
 @dataclass
