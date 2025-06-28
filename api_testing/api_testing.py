@@ -6,6 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional, Any
+from collections import Counter
 import logging
 from urllib.parse import quote
 
@@ -112,18 +113,32 @@ class GoogleBooksClient(BookAPIClient):
             if self.api_key:
                 params["key"] = self.api_key
 
-            success, response_time, data = self._make_request(self.base_url, params)
+            # Try different parameter combinations to get more data
+            param_variations = [
+                params,  # Basic query
+                {
+                    **params,
+                    "printType": "books",
+                    "projection": "full",
+                },  # Full projection
+                {**params, "langRestrict": "en", "maxResults": 10},  # More results
+            ]
 
-            if success and data.get("totalItems", 0) > 0:
-                genres = self._extract_genres(data)
-                return APIResponse(
-                    api_name="Google Books",
-                    book_info=book,
-                    success=True,
-                    response_time=response_time,
-                    genres=genres,
-                    raw_response=data,
+            for param_set in param_variations:
+                success, response_time, data = self._make_request(
+                    self.base_url, param_set
                 )
+
+                if success and data.get("totalItems", 0) > 0:
+                    genres = self._extract_genres(data)
+                    return APIResponse(
+                        api_name="Google Books",
+                        book_info=book,
+                        success=True,
+                        response_time=response_time,
+                        genres=genres,
+                        raw_response=data,
+                    )
 
         # No successful results
         return APIResponse(
@@ -141,8 +156,20 @@ class GoogleBooksClient(BookAPIClient):
 
         for item in data.get("items", []):
             volume_info = item.get("volumeInfo", {})
-            categories = volume_info.get("categories", [])
 
+            # CRITICAL: Extract mainCategory first - this is the primary classification!
+            main_category = volume_info.get("mainCategory", "")
+            if main_category:
+                genres.add(main_category.strip())
+                # Also split mainCategory on / and & to get sub-categories
+                sub_categories = re.split(r"[/&]", main_category)
+                for sub_cat in sub_categories:
+                    clean_cat = sub_cat.strip()
+                    if clean_cat:
+                        genres.add(clean_cat)
+
+            # Extract from categories array (secondary)
+            categories = volume_info.get("categories", [])
             for category in categories:
                 # Split on common delimiters and clean up
                 sub_categories = re.split(r"[/,&]", category)
@@ -151,7 +178,115 @@ class GoogleBooksClient(BookAPIClient):
                     if clean_cat:
                         genres.add(clean_cat)
 
+            # Extract from description if it contains genre keywords (tertiary)
+            description = volume_info.get("description", "")
+            genre_keywords = self._extract_genres_from_description(description)
+            genres.update(genre_keywords)
+
         return list(genres)
+
+    def _extract_genres_from_description(self, description: str) -> List[str]:
+        """Extract potential genres from book description"""
+        genre_keywords = set()
+
+        # Common genre indicators in descriptions
+        genre_patterns = {
+            "fantasy": ["fantasy", "magic", "wizard", "dragon", "mythical", "quest"],
+            "science fiction": [
+                "science fiction",
+                "sci-fi",
+                "space",
+                "future",
+                "alien",
+                "technology",
+            ],
+            "mystery": ["mystery", "detective", "murder", "crime", "investigation"],
+            "romance": ["romance", "love story", "romantic"],
+            "thriller": ["thriller", "suspense", "action-packed"],
+            "historical fiction": ["historical", "period", "century", "war"],
+            "biography": ["biography", "life of", "memoir"],
+            "young adult": ["young adult", "YA", "teen"],
+        }
+
+        description_lower = description.lower()
+        for genre, keywords in genre_patterns.items():
+            if any(keyword in description_lower for keyword in keywords):
+                genre_keywords.add(genre)
+
+        return list(genre_keywords)
+
+    def debug_google_books_response(self, book: BookInfo) -> None:
+        """Debug what Google Books API actually returns with different parameters"""
+        search_queries = []
+
+        if book.isbn13:
+            search_queries.append(f"isbn:{book.isbn13}")
+        if book.isbn and book.isbn != book.isbn13:
+            search_queries.append(f"isbn:{book.isbn}")
+
+        title_author_query = f'intitle:"{book.title}" inauthor:"{book.author}"'
+        search_queries.append(title_author_query)
+
+        print(f"\n🔍 DEBUG: Google Books API Response for '{book.title}'")
+        print("=" * 60)
+
+        for i, query in enumerate(search_queries):
+            print(f"\n📝 Query {i+1}: {query}")
+
+            # Test both lite and full projections
+            param_sets = [
+                {"q": query, "projection": "lite"},
+                {"q": query, "projection": "full"},
+                {"q": query, "projection": "full", "maxResults": 5},
+            ]
+
+            for j, params in enumerate(param_sets):
+                if self.api_key:
+                    params["key"] = self.api_key
+
+                success, response_time, data = self._make_request(self.base_url, params)
+
+                if success and data.get("totalItems", 0) > 0:
+                    print(f"\n   ✅ Parameter set {j+1}: {params}")
+
+                    item = data.get("items", [{}])[0]
+                    volume_info = item.get("volumeInfo", {})
+
+                    print(f"   📚 Total Items Found: {data.get('totalItems', 0)}")
+                    print(
+                        f"   🎯 **mainCategory**: {volume_info.get('mainCategory', 'MISSING!')}"
+                    )
+                    print(f"   📂 categories: {volume_info.get('categories', 'None')}")
+                    print(
+                        f"   📖 MaturityRating: {volume_info.get('maturityRating', 'None')}"
+                    )
+                    print(f"   🏢 Publisher: {volume_info.get('publisher', 'None')}")
+
+                    # Show first part of description
+                    description = volume_info.get("description", "")
+                    if description:
+                        print(f"   📝 Description preview: {description[:150]}...")
+
+                    # Extract genres using our current method
+                    extracted_genres = self._extract_genres(data)
+                    print(
+                        f"   🎭 Our extracted genres ({len(extracted_genres)}): {extracted_genres}"
+                    )
+
+                    return  # Stop after first successful result
+                else:
+                    print(f"   ❌ Parameter set {j+1} failed: {params}")
+
+        print(
+            f"❌ No Google Books data found for '{book.title}' with any parameter combination"
+        )
+        print("\n💡 POSSIBLE REASONS FOR WEBSITE vs API DISCREPANCY:")
+        print("   1. Website uses different/internal API endpoints")
+        print("   2. Website combines data from multiple sources")
+        print("   3. Website uses book metadata from publisher feeds")
+        print("   4. Website applies machine learning to enhance categories")
+        print("   5. We might need a Google Books API key for full access")
+        print("   6. Book might be in a different edition/ISBN on the website")
 
 
 class OpenLibraryClient(BookAPIClient):
@@ -242,6 +377,7 @@ class BookAPITester:
     def __init__(self):
         self.clients = {}
         self.results = []
+        self.test_books = []  # Store books for debugging
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def add_client(self, name: str, client: BookAPIClient):
@@ -274,6 +410,7 @@ class BookAPITester:
             books.append(book)
 
         self.logger.info(f"Loaded {len(books)} books for testing")
+        self.test_books = books  # Store for debugging
         return books
 
     def _clean_isbn(self, isbn_str: str) -> str:
@@ -380,7 +517,191 @@ class BookAPITester:
 
         print("\n" + "=" * 80)
 
+    def analyze_genre_patterns(self) -> None:
+        """Analyze genre patterns across APIs"""
+        if not self.results:
+            print("No results to analyze")
+            return
+
+        print("\n" + "=" * 80)
+        print("GENRE ANALYSIS BY API")
+        print("=" * 80)
+
+        api_genres = {}
+
+        for result in self.results:
+            api_name = result["api_name"]
+            if result["success"] and result["genres"]:
+                if api_name not in api_genres:
+                    api_genres[api_name] = []
+                api_genres[api_name].extend(result["genres"])
+
+        for api_name, all_genres in api_genres.items():
+            print(f"\n🔍 {api_name} Genre Analysis:")
+            print(f"   Total genres collected: {len(all_genres)}")
+            print(f"   Unique genres: {len(set(all_genres))}")
+
+            # Most common genres
+            genre_counts = Counter(all_genres)
+            print(f"\n   📊 Most common genres:")
+            for genre, count in genre_counts.most_common(10):
+                print(f"      {count}x: {genre}")
+
+            # Analyze genre complexity
+            simple_genres = [
+                g
+                for g in set(all_genres)
+                if "," not in g and "/" not in g and len(g.split()) <= 2
+            ]
+            complex_genres = [
+                g for g in set(all_genres) if "," in g or "/" in g or len(g.split()) > 2
+            ]
+
+            print(f"\n   📝 Genre complexity:")
+            print(
+                f"      Simple genres: {len(simple_genres)} (e.g., {simple_genres[:3]})"
+            )
+            print(
+                f"      Complex genres: {len(complex_genres)} (e.g., {complex_genres[:3]})"
+            )
+
+    def compare_apis_for_book(self, book_title: str) -> None:
+        """Compare how different APIs categorize the same book"""
+        print(f"\n🔍 API Comparison for: {book_title}")
+        print("=" * 60)
+
+        book_results = [
+            r
+            for r in self.results
+            if book_title.lower() in r["book_info"]["title"].lower()
+        ]
+
+        if not book_results:
+            print("❌ Book not found in results")
+            return
+
+        for result in book_results:
+            api_name = result["api_name"]
+            genres = result["genres"] if result["success"] else []
+
+            print(f"\n{api_name}:")
+            if genres:
+                for genre in genres:
+                    print(f"  • {genre}")
+            else:
+                print("  (No genres found)")
+
+    def suggest_api_strategy(self) -> None:
+        """Suggest the best API strategy based on results"""
+        if not self.results:
+            return
+
+        report = self.generate_report()
+
+        print("\n" + "=" * 80)
+        print("🎯 RECOMMENDED API STRATEGY")
+        print("=" * 80)
+
+        # Analyze each API's strengths
+        for api_name, stats in report.items():
+            print(f"\n{api_name}:")
+            print(f"  ✓ Reliability: {stats['success_rate']:.0f}%")
+            print(f"  ⚡ Speed: {stats['avg_response_time']:.2f}s average")
+            print(
+                f"  📚 Genre coverage: {stats['avg_genres_found']:.1f} genres per book"
+            )
+
+            if api_name == "Google Books":
+                if stats["avg_genres_found"] < 2:
+                    print(
+                        "  ⚠️  Very limited genre data - use for basic categorization only"
+                    )
+                print("  💡 Best for: Quick, reliable basic categories")
+
+            elif api_name == "OpenLibrary":
+                if stats["avg_genres_found"] > 5:
+                    print("  ✨ Rich subject data - excellent for detailed tagging")
+                print("  💡 Best for: Detailed subject classification, academic use")
+
+        # Overall recommendation
+        print(f"\n🎯 OVERALL RECOMMENDATION:")
+        best_detailed = max(report.items(), key=lambda x: x[1]["avg_genres_found"])
+        best_reliable = max(report.items(), key=lambda x: x[1]["success_rate"])
+
+        if (
+            best_detailed[1]["avg_genres_found"]
+            > best_reliable[1]["avg_genres_found"] * 3
+        ):
+            print(
+                f"  Primary: Use {best_detailed[0]} for detailed genre classification"
+            )
+            print(
+                f"  Fallback: Use {best_reliable[0]} for basic categories when detailed fails"
+            )
+        else:
+            print(
+                f"  Use {best_reliable[0]} as primary (best balance of reliability and detail)"
+            )
+
+        print(f"\n💡 For your 762 books:")
+        print(f"  • Start with the more detailed API for richer classification")
+        print(f"  • Implement fallback to handle failures gracefully")
+        print(f"  • Consider genre normalization/mapping for consistency")
+
+    def debug_api_responses(self, book_index: int = 0) -> None:
+        """Debug API responses for a specific book to see what data we're missing"""
+        if not hasattr(self, "test_books") or not self.test_books:
+            print("❌ No test books available. Run load_goodreads_data first.")
+            return
+
+        if book_index >= len(self.test_books):
+            print(
+                f"❌ Book index {book_index} out of range. Available: 0-{len(self.test_books)-1}"
+            )
+            return
+
+        book = self.test_books[book_index]
+        print(f"\n🔍 DEBUGGING API RESPONSES FOR: {book.title} by {book.author}")
+        print("=" * 80)
+
+        # Debug Google Books
+        for client_name, client in self.clients.items():
+            if isinstance(client, GoogleBooksClient):
+                client.debug_google_books_response(book)
+                break
+
     def generate_report(self) -> Dict[str, Any]:
+        """Generate summary report of API performance"""
+        if not self.results:
+            return {"error": "No results to analyze"}
+
+        df = pd.DataFrame(self.results)
+
+        report = {}
+
+        for api_name in df["api_name"].unique():
+            api_data = df[df["api_name"] == api_name]
+
+            successful = api_data[api_data["success"] == True]
+
+            report[api_name] = {
+                "total_requests": len(api_data),
+                "successful_requests": len(successful),
+                "success_rate": len(successful) / len(api_data) * 100,
+                "avg_response_time": api_data["response_time"].mean(),
+                "min_response_time": api_data["response_time"].min(),
+                "max_response_time": api_data["response_time"].max(),
+                "avg_genres_found": (
+                    successful["genres"].apply(len).mean() if len(successful) > 0 else 0
+                ),
+                "books_with_genres": (
+                    len(successful[successful["genres"].apply(len) > 0])
+                    if len(successful) > 0
+                    else 0
+                ),
+            }
+
+        return report
         """Generate summary report of API performance"""
         if not self.results:
             return {"error": "No results to analyze"}
@@ -438,6 +759,12 @@ if __name__ == "__main__":
     # Display detailed results
     tester.display_detailed_results()
 
+    # Analyze genre patterns
+    tester.analyze_genre_patterns()
+
+    # Suggest API strategy
+    tester.suggest_api_strategy()
+
     # Generate report
     report = tester.generate_report()
 
@@ -461,8 +788,39 @@ if __name__ == "__main__":
     print(f"\n💾 Detailed results saved to 'api_test_results.csv'")
     print(f"📊 Performance report saved to 'api_performance_report.json'")
 
+    # Example: Compare how APIs categorize a specific book
+    # tester.compare_apis_for_book("The Innovators")
+
+    # Example: Debug what Google Books API actually returns for first book
+    print("\n" + "=" * 80)
+    print("🔍 DEBUGGING GOOGLE BOOKS API RESPONSE")
+    print("=" * 80)
+    print("This will show you what data Google Books API actually provides")
+    print("vs. what you see on the website")
+    tester.debug_api_responses(0)  # Debug first book
+
     # Uncomment this line to display existing results instead of running new tests:
     # load_and_display_results("api_test_results.csv")
+
+
+# Quick debugging function - uncomment and run this instead of full test
+def quick_debug_google_books():
+    """Quick debug of Google Books API for investigating genre discrepancy"""
+    tester = BookAPITester()
+    tester.add_client("google_books", GoogleBooksClient(rate_limit=1.0))
+
+    # Load just first book for debugging
+    books = tester.load_goodreads_data(
+        "../data/goodreads_library_export-2025.06.15.csv", sample_size=1
+    )
+    if books:
+        print("🔍 Quick Google Books API Debug")
+        print("Comparing API data vs. what you see on Google Books website...")
+        tester.debug_api_responses(0)
+
+
+# To run quick debug instead of full test, uncomment this:
+quick_debug_google_books()
 
 
 # Example usage for loading and displaying existing results
@@ -485,6 +843,8 @@ def load_and_display_results(csv_file: str = "api_test_results.csv"):
         temp_tester = BookAPITester()
         temp_tester.results = df.to_dict("records")
         temp_tester.display_detailed_results()
+        temp_tester.analyze_genre_patterns()
+        temp_tester.suggest_api_strategy()
 
         # Generate and display report
         report = temp_tester.generate_report()
