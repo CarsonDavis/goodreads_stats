@@ -48,6 +48,7 @@ class BooksPage {
 
     renderPage() {
         this.updatePageTitle();
+        this.updateBackButton();
         this.hideLoading();
         
         const bookList = document.getElementById('book-list');
@@ -103,6 +104,13 @@ class BooksPage {
         subtitleElement.textContent = subtitle;
     }
 
+    updateBackButton() {
+        const backButton = document.getElementById('back-to-dashboard');
+        if (this.uuid) {
+            backButton.href = `index.html?uuid=${this.uuid}`;
+        }
+    }
+
     filterBooks() {
         switch (this.filterType) {
             case 'genre':
@@ -124,7 +132,13 @@ class BooksPage {
 
     createBookCard(book) {
         const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow';
+        card.className = 'bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer';
+        
+        // Make card clickable
+        card.addEventListener('click', () => {
+            const returnUrl = encodeURIComponent(`books.html?type=${this.filterType}&value=${encodeURIComponent(this.filterValue)}`);
+            window.location.href = `book.html?id=${book.goodreads_id}&uuid=${this.uuid}&return=${returnUrl}`;
+        });
         
         const ratingDisplay = book.my_rating ? '⭐'.repeat(book.my_rating) : 'Not Rated';
         const readDate = book.date_read ? new Date(book.date_read).toLocaleDateString('en-US', {

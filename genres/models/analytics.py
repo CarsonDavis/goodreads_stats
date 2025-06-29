@@ -143,6 +143,10 @@ class BookAnalytics:
             # Images
             "thumbnail_url": self.thumbnail_url,
             "small_thumbnail_url": self.small_thumbnail_url,
+            # Review data
+            "my_review": self.my_review,
+            "private_notes": self.private_notes,
+            "has_spoilers": self.has_spoilers,
             # Flags
             "has_review": bool(self.my_review and self.my_review.strip()),
             "genre_enriched": self.genre_enrichment_success,
