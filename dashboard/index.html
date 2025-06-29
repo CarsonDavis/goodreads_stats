@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 Reading Dashboard</title>
+    
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom styles -->
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card {
+            backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(209, 213, 219, 0.3);
+        }
+        .dark .card {
+            background-color: rgba(17, 24, 39, 0.75);
+            border: 1px solid rgba(75, 85, 99, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Header -->
+    <header class="gradient-bg text-white py-8 mb-8">
+        <div class="container mx-auto px-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-4xl font-bold mb-2">📚 Reading Dashboard</h1>
+                    <p class="text-lg opacity-90" id="subtitle">Loading your reading journey...</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="darkModeToggle" class="p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all">
+                        🌙
+                    </button>
+                    <div class="text-right">
+                        <div class="text-sm opacity-75">Total Books Read</div>
+                        <div class="text-3xl font-bold" id="totalBooks">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Loading State -->
+    <div id="loading" class="container mx-auto px-6 text-center py-20">
+        <div class="animate-pulse">
+            <div class="text-6xl mb-4">📖</div>
+            <div class="text-xl text-gray-600 dark:text-gray-300">Loading your reading data...</div>
+        </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div id="dashboard" class="container mx-auto px-6 pb-12 hidden">
+        
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="card rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pages</p>
+                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="totalPages">-</p>
+                    </div>
+                    <div class="text-3xl">📄</div>
+                </div>
+            </div>
+            
+            <div class="card rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Average Rating</p>
+                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="avgRating">-</p>
+                    </div>
+                    <div class="text-3xl">⭐</div>
+                </div>
+            </div>
+            
+            <div class="card rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Unique Genres</p>
+                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="uniqueGenres">-</p>
+                    </div>
+                    <div class="text-3xl">🏷️</div>
+                </div>
+            </div>
+            
+            <div class="card rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Reading Years</p>
+                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="readingYears">-</p>
+                    </div>
+                    <div class="text-3xl">📅</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            
+            <!-- Books by Year Chart -->
+            <div class="card rounded-xl p-6">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">📊 Books Read by Year</h3>
+                <div class="relative h-80">
+                    <canvas id="booksByYearChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Rating Distribution -->
+            <div class="card rounded-xl p-6">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">⭐ Rating Distribution</h3>
+                <div class="relative h-80">
+                    <canvas id="ratingChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            
+            <!-- Top Genres -->
+            <div class="card rounded-xl p-6">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">🏷️ Top Genres</h3>
+                <div class="relative h-80">
+                    <canvas id="genresChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Pages Timeline -->
+            <div class="card rounded-xl p-6">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">📖 Pages Read by Year</h3>
+                <div class="relative h-80">
+                    <canvas id="pagesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Books Table -->
+        <div class="card rounded-xl p-6">
+            <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">📚 Recent Books</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Title</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Author</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Date</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Rating</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Pages</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentBooksTable">
+                        <!-- Books will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="container mx-auto px-6 text-center py-20 hidden">
+        <div class="text-6xl mb-4">📋</div>
+        <div class="text-xl text-gray-600 dark:text-gray-300 mb-4">Dashboard data not found</div>
+        <div class="text-gray-500 dark:text-gray-400 mb-6">
+            <div class="mb-2">Make sure you include a UUID in the URL:</div>
+            <div class="font-mono bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                <div>✅ /dashboard/?uuid=550e8400-e29b-41d4-a716-446655440000</div>
+                <div>✅ /dashboard/#550e8400-e29b-41d4-a716-446655440000</div>
+            </div>
+            <div class="mt-4 text-xs">
+                Generate data with: <span class="font-mono">python create_dashboard_json.py</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard JavaScript -->
+    <script src="dashboard.js"></script>
+</body>
+</html>
