@@ -110,6 +110,8 @@ class BookAnalytics:
             "goodreads_id": self.goodreads_id,
             "title": self.title,
             "author": self.author,
+            "isbn": self.isbn,
+            "isbn13": self.isbn13,
             # Analytics key fields
             "date_read": self.date_read.isoformat() if self.date_read else None,
             "reading_year": self.reading_year,

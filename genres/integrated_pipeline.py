@@ -38,7 +38,7 @@ class IntegratedBookPipeline:
     def process_csv_to_dashboard_json(
         self,
         csv_path: str,
-        output_json_path: str = "dashboard_data/books.json",
+        output_json_path: Optional[str] = None,
         sample_size: Optional[int] = None,
         include_unread: bool = False,
         enrich_genres: bool = True
@@ -48,7 +48,7 @@ class IntegratedBookPipeline:
         
         Args:
             csv_path: Path to Goodreads CSV export
-            output_json_path: Where to save final JSON
+            output_json_path: Where to save final JSON (if None, generates UUID filename)
             sample_size: Optional limit on books to process
             include_unread: Whether to include to-read books
             enrich_genres: Whether to run genre enrichment (can be False for testing)
@@ -180,7 +180,7 @@ class IntegratedBookPipeline:
 
 def quick_pipeline(
     csv_path: str = "data/goodreads_library_export-2025.06.15.csv",
-    output_path: str = "dashboard_data/books.json",
+    output_path: Optional[str] = None,
     sample_size: int = 10,
     enrich_genres: bool = True
 ) -> str:
@@ -189,7 +189,7 @@ def quick_pipeline(
     
     Args:
         csv_path: Path to Goodreads CSV
-        output_path: Output JSON path
+        output_path: Output JSON path (if None, generates UUID filename)
         sample_size: Number of books to process (small for testing)
         enrich_genres: Whether to run genre enrichment
         

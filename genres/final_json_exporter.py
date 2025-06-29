@@ -6,9 +6,10 @@ Workflow: CSV -> Genre Enrichment -> BookAnalytics -> Final JSON
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from .analytics_models import BookAnalytics
 
@@ -30,7 +31,7 @@ class FinalJSONExporter:
     def export_books_to_json(
         self, 
         books: List[BookAnalytics], 
-        output_path: str,
+        output_path: Optional[str] = None,
         include_metadata: bool = True
     ) -> Dict[str, Any]:
         """
@@ -38,12 +39,19 @@ class FinalJSONExporter:
         
         Args:
             books: List of BookAnalytics objects with enriched genres
-            output_path: Path where to save the final JSON file
+            output_path: Path where to save the JSON file (if None, generates UUID filename)
             include_metadata: Whether to include export metadata
             
         Returns:
-            Dictionary containing the exported data structure
+            Dictionary containing the exported data structure with 'export_path' added
         """
+        # Generate export UUID for tracking and filename
+        export_uuid = str(uuid.uuid4())
+        
+        # Generate UUID filename if no path provided
+        if output_path is None:
+            output_path = f"dashboard_data/{export_uuid}.json"
+        
         self.logger.info(f"Exporting {len(books)} books to {output_path}")
         
         # Convert books to dashboard format
@@ -54,12 +62,13 @@ class FinalJSONExporter:
         
         # Create the final data structure
         export_data = {
+            "export_id": export_uuid,
             "books": dashboard_books,
             "summary": self._generate_summary_stats(books),
         }
         
         if include_metadata:
-            export_data["metadata"] = self._generate_metadata(books)
+            export_data["metadata"] = self._generate_metadata(books, export_uuid)
         
         # Ensure output directory exists
         output_path = Path(output_path)
@@ -70,10 +79,13 @@ class FinalJSONExporter:
             json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
         
         self.logger.info(f"Successfully exported to {output_path}")
+        self.logger.info(f"Export ID: {export_uuid}")
         self.logger.info(f"Export summary: {export_data['summary']['total_books']} books, "
                         f"{export_data['summary']['read_books']} read, "
                         f"{export_data['summary']['genre_enriched_books']} with genres")
         
+        # Add export path to returned data
+        export_data["export_path"] = str(output_path)
         return export_data
     
     def _generate_summary_stats(self, books: List[BookAnalytics]) -> Dict[str, Any]:
@@ -128,9 +140,10 @@ class FinalJSONExporter:
         
         return top_genres
     
-    def _generate_metadata(self, books: List[BookAnalytics]) -> Dict[str, Any]:
+    def _generate_metadata(self, books: List[BookAnalytics], export_id: str) -> Dict[str, Any]:
         """Generate metadata about the export process"""
         return {
+            "export_id": export_id,
             "export_timestamp": datetime.now().isoformat(),
             "exporter_version": "1.0.0",
             "data_schema_version": "1.0.0",
@@ -205,14 +218,14 @@ class FinalJSONExporter:
 
 def create_dashboard_json(
     books: List[BookAnalytics], 
-    output_path: str = "dashboard_data/books.json"
+    output_path: Optional[str] = None
 ) -> str:
     """
     Convenience function to create final dashboard JSON.
     
     Args:
         books: List of BookAnalytics objects with enriched genres
-        output_path: Where to save the JSON file
+        output_path: Where to save the JSON file (if None, generates UUID filename)
         
     Returns:
         Path to the created JSON file
@@ -231,4 +244,4 @@ def create_dashboard_json(
         for warning in validation["warnings"]:
             logger.warning(warning)
     
-    return str(output_path)
+    return export_data["export_path"]

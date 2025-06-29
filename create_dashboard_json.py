@@ -29,7 +29,7 @@ def main():
     
     # Configuration
     csv_path = "data/goodreads_library_export-2025.06.15.csv"
-    output_path = "dashboard_data/books.json"
+    output_path = None  # Let it auto-generate UUID filename
     
     # Check if CSV exists
     if not Path(csv_path).exists():

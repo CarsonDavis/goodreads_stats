@@ -20,6 +20,10 @@ from .book_feeder import BookFeeder
 # Analytics components
 from .analytics_models import BookAnalytics, ReadingSession
 from .analytics_csv_processor import AnalyticsCSVProcessor
+from .final_json_exporter import FinalJSONExporter, create_dashboard_json
+from .integrated_pipeline import IntegratedBookPipeline, quick_pipeline
+from .async_genre_enricher import AsyncGenreEnricher
+from .async_pipeline import AsyncBookPipeline, async_quick_pipeline
 
 # Legacy/internal components (available but not primary interface)
 from .api_caller import APICaller
@@ -39,6 +43,13 @@ __all__ = [
     "BookAnalytics",
     "ReadingSession",
     "AnalyticsCSVProcessor",
+    "FinalJSONExporter",
+    "create_dashboard_json",
+    "IntegratedBookPipeline",
+    "quick_pipeline",
+    "AsyncGenreEnricher",
+    "AsyncBookPipeline", 
+    "async_quick_pipeline",
     
     # Internal components
     "APICaller",
