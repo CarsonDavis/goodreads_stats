@@ -136,8 +136,8 @@ class BooksPage {
         
         // Make card clickable
         card.addEventListener('click', () => {
-            const returnUrl = encodeURIComponent(`books.html?type=${this.filterType}&value=${encodeURIComponent(this.filterValue)}`);
-            window.location.href = `book.html?id=${book.goodreads_id}&uuid=${this.uuid}&return=${returnUrl}`;
+            const returnUrl = encodeURIComponent(`books?type=${this.filterType}&value=${encodeURIComponent(this.filterValue)}`);
+            window.location.href = `detail.html?id=${book.goodreads_id}&uuid=${this.uuid}&return=${returnUrl}`;
         });
         
         const ratingDisplay = book.my_rating ? '⭐'.repeat(book.my_rating) : 'Not Rated';
