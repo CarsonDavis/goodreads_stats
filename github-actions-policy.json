@@ -1,0 +1,231 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CDKBootstrapAndDeploy",
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:CreateStack",
+                "cloudformation:UpdateStack",
+                "cloudformation:DeleteStack",
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate",
+                "cloudformation:ListStacks",
+                "cloudformation:ListStackResources",
+                "cloudformation:ValidateTemplate"
+            ],
+            "Resource": [
+                "arn:aws:cloudformation:us-east-1:*:stack/CDKToolkit/*",
+                "arn:aws:cloudformation:us-east-1:*:stack/GoodreadsStats-*/*"
+            ]
+        },
+        {
+            "Sid": "S3BucketsForProject",
+            "Effect": "Allow", 
+            "Action": [
+                "s3:CreateBucket",
+                "s3:DeleteBucket",
+                "s3:GetBucketLocation",
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy",
+                "s3:DeleteBucketPolicy",
+                "s3:GetBucketVersioning",
+                "s3:PutBucketVersioning",
+                "s3:GetBucketCORS",
+                "s3:PutBucketCORS",
+                "s3:GetBucketWebsite",
+                "s3:PutBucketWebsite",
+                "s3:DeleteBucketWebsite",
+                "s3:GetBucketNotification",
+                "s3:PutBucketNotification",
+                "s3:GetBucketLifecycleConfiguration",
+                "s3:PutBucketLifecycleConfiguration",
+                "s3:DeleteBucketLifecycleConfiguration",
+                "s3:GetBucketPublicAccessBlock",
+                "s3:PutBucketPublicAccessBlock",
+                "s3:DeleteBucketPublicAccessBlock"
+            ],
+            "Resource": [
+                "arn:aws:s3:::goodreads-stats",
+                "arn:aws:s3:::goodreads-stats-*",
+                "arn:aws:s3:::cdk-*"
+            ]
+        },
+        {
+            "Sid": "S3ObjectsForProject",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::goodreads-stats/*",
+                "arn:aws:s3:::goodreads-stats-*/*",
+                "arn:aws:s3:::cdk-*/*"
+            ]
+        },
+        {
+            "Sid": "LambdaFunctions",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:CreateFunction",
+                "lambda:DeleteFunction",
+                "lambda:UpdateFunctionCode",
+                "lambda:UpdateFunctionConfiguration",
+                "lambda:GetFunction",
+                "lambda:ListFunctions",
+                "lambda:InvokeFunction",
+                "lambda:AddPermission",
+                "lambda:RemovePermission",
+                "lambda:GetPolicy",
+                "lambda:PublishLayerVersion",
+                "lambda:DeleteLayerVersion",
+                "lambda:GetLayerVersion",
+                "lambda:ListLayerVersions"
+            ],
+            "Resource": [
+                "arn:aws:lambda:us-east-1:*:function:GoodreadsStats-*",
+                "arn:aws:lambda:us-east-1:*:layer:GoodreadsStats-*"
+            ]
+        },
+        {
+            "Sid": "APIGateway",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:GET",
+                "apigateway:POST", 
+                "apigateway:PUT",
+                "apigateway:DELETE",
+                "apigateway:PATCH"
+            ],
+            "Resource": [
+                "arn:aws:apigateway:us-east-1::/restapis",
+                "arn:aws:apigateway:us-east-1::/restapis/*"
+            ]
+        },
+        {
+            "Sid": "CloudFront",
+            "Effect": "Allow",
+            "Action": [
+                "cloudfront:CreateDistribution",
+                "cloudfront:UpdateDistribution",
+                "cloudfront:DeleteDistribution",
+                "cloudfront:GetDistribution",
+                "cloudfront:GetDistributionConfig",
+                "cloudfront:ListDistributions",
+                "cloudfront:CreateOriginAccessIdentity",
+                "cloudfront:DeleteOriginAccessIdentity",
+                "cloudfront:GetOriginAccessIdentity",
+                "cloudfront:UpdateOriginAccessIdentity",
+                "cloudfront:ListOriginAccessIdentities",
+                "cloudfront:CreateInvalidation",
+                "cloudfront:GetInvalidation",
+                "cloudfront:ListInvalidations"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "CertificateManager",
+            "Effect": "Allow",
+            "Action": [
+                "acm:RequestCertificate",
+                "acm:DeleteCertificate",
+                "acm:DescribeCertificate",
+                "acm:ListCertificates",
+                "acm:AddTagsToCertificate",
+                "acm:RemoveTagsFromCertificate"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                }
+            }
+        },
+        {
+            "Sid": "Route53ForDomain",
+            "Effect": "Allow",
+            "Action": [
+                "route53:ChangeResourceRecordSets",
+                "route53:GetHostedZone",
+                "route53:ListResourceRecordSets",
+                "route53:GetChange"
+            ],
+            "Resource": [
+                "arn:aws:route53:::hostedzone/*",
+                "arn:aws:route53:::change/*"
+            ]
+        },
+        {
+            "Sid": "Route53ListZones",
+            "Effect": "Allow",
+            "Action": [
+                "route53:ListHostedZones",
+                "route53:ListHostedZonesByName"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "IAMForLambdaRoles",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:PassRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies",
+                "iam:TagRole",
+                "iam:UntagRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::*:role/GoodreadsStats-*",
+                "arn:aws:iam::*:role/cdk-*"
+            ]
+        },
+        {
+            "Sid": "CloudWatchLogs",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:DeleteLogGroup",
+                "logs:DescribeLogGroups",
+                "logs:PutRetentionPolicy",
+                "logs:DeleteRetentionPolicy"
+            ],
+            "Resource": [
+                "arn:aws:logs:us-east-1:*:log-group:/aws/lambda/GoodreadsStats-*"
+            ]
+        },
+        {
+            "Sid": "CDKAssumeRoles",
+            "Effect": "Allow",
+            "Action": [
+                "sts:AssumeRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::*:role/cdk-*"
+            ]
+        },
+        {
+            "Sid": "SSMForCDK",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters"
+            ],
+            "Resource": [
+                "arn:aws:ssm:us-east-1:*:parameter/cdk-bootstrap/*"
+            ]
+        }
+    ]
+}
