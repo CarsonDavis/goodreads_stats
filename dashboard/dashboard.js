@@ -213,13 +213,16 @@ class ReadingDashboard {
             ratingCounts[book.my_rating]++;
         });
 
+        const chartData = Object.entries(ratingCounts).sort((a, b) => a[0] - b[0]);
+
         const ctx = document.getElementById('ratingChart').getContext('2d');
         this.charts.rating = new Chart(ctx, {
-            type: 'doughnut',
+            type: 'bar',
             data: {
-                labels: ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'],
+                labels: chartData.map(d => `⭐`.repeat(d[0])),
                 datasets: [{
-                    data: [ratingCounts[1], ratingCounts[2], ratingCounts[3], ratingCounts[4], ratingCounts[5]],
+                    label: 'Number of Books',
+                    data: chartData.map(d => d[1]),
                     backgroundColor: [
                         '#ef4444',
                         '#f97316',
@@ -233,7 +236,7 @@ class ReadingDashboard {
                 ...this.getChartOptions(),
                 plugins: {
                     legend: {
-                        position: 'bottom'
+                        display: false
                     }
                 }
             }
@@ -260,6 +263,15 @@ class ReadingDashboard {
             options: {
                 ...this.getChartOptions(),
                 indexAxis: 'y',
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const chartElement = elements[0];
+                        const index = chartElement.index;
+                        const genre = top10[index].genre;
+                        const uuid = this.getUuidFromUrl();
+                        window.location.href = `genre.html?uuid=${uuid}&genre=${encodeURIComponent(genre)}`;
+                    }
+                },
                 scales: {
                     x: {
                         beginAtZero: true,

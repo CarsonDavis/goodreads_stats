@@ -1,4 +1,4 @@
-# genres/models.py
+# genres/models/book.py
 """
 Data models for the book genre enrichment pipeline.
 """

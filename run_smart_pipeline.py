@@ -41,9 +41,7 @@ async def main():
     start_time = time.time()
     
     try:
-        from genres.analytics_csv_processor import AnalyticsCSVProcessor
-        from genres.adaptive_enricher import EnvironmentAwareBookPipeline
-        from genres.final_json_exporter import create_dashboard_json
+        from genres import AnalyticsCSVProcessor, EnvironmentAwareBookPipeline, create_dashboard_json
         
         # Step 1: Load books
         print("📊 Loading books from CSV...")
@@ -55,9 +53,9 @@ async def main():
         )
         
         # Convert to BookInfo for enrichment
+        from genres import BookInfo
         book_infos = []
         for book in books:
-            from genres.models import BookInfo
             book_info = BookInfo(
                 title=book.title,
                 author=book.author,

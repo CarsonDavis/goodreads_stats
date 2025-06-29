@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from .analytics_models import BookAnalytics
+from ..models.analytics import BookAnalytics
 
 
 class FinalJSONExporter:

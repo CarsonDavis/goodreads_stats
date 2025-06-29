@@ -1,4 +1,4 @@
-# genres/processors/google_processor.py
+# genres/sources/google.py
 """
 Google Books API response processor.
 """

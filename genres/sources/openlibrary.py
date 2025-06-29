@@ -1,4 +1,4 @@
-# genres/processors/open_library_processor.py
+# genres/sources/openlibrary.py
 """
 Open Library API response processor.
 """

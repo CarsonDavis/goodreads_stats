@@ -1,4 +1,4 @@
-# genres/genre_merger.py
+# genres/utils/genre_merger.py
 """
 Genre merging and normalization for the Book Data Enrichment Pipeline.
 """

@@ -9,7 +9,7 @@ import logging
 from typing import List, Optional
 from datetime import datetime, date
 
-from .analytics_models import BookAnalytics
+from ..models.analytics import BookAnalytics
 
 
 class AnalyticsCSVProcessor:

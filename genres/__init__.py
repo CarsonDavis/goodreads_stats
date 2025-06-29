@@ -1,60 +1,46 @@
 # genres/__init__.py
 """
-Book genre enrichment pipeline with clean separation of concerns.
+Book genre enrichment pipeline - Smart adaptive pipeline for any environment.
 
 Primary interfaces:
-- GenreEnricher: Core single-book enrichment
-- CSVProcessor: Load books from Goodreads CSV
-- BookFeeder: Orchestrate batch processing
-
-Analytics interfaces:
+- EnvironmentAwareBookPipeline: Smart pipeline that adapts to local/AWS environments
 - AnalyticsCSVProcessor: Load comprehensive book data for dashboard analytics
 - BookAnalytics: Enhanced book model for time-series analysis
 """
 
-from .models import BookInfo, EnrichedBook
-from .genre_enricher import GenreEnricher
-from .csv_processor import CSVProcessor
-from .book_feeder import BookFeeder
+# Data models
+from .models import BookInfo, EnrichedBook, BookAnalytics, ReadingSession
 
-# Analytics components
-from .analytics_models import BookAnalytics, ReadingSession
-from .analytics_csv_processor import AnalyticsCSVProcessor
-from .final_json_exporter import FinalJSONExporter, create_dashboard_json
-from .integrated_pipeline import IntegratedBookPipeline, quick_pipeline
-from .async_genre_enricher import AsyncGenreEnricher
-from .async_pipeline import AsyncBookPipeline, async_quick_pipeline
+# Core pipeline components
+from .pipeline import (
+    AnalyticsCSVProcessor,
+    EnvironmentAwareBookPipeline, 
+    AdaptiveGenreEnricher,
+    AsyncGenreEnricher,
+    FinalJSONExporter,
+    create_dashboard_json
+)
 
-# Legacy/internal components (available but not primary interface)
-from .api_caller import APICaller
-from .fetchers import fetch_google_data, fetch_open_library_data
-from .processors import process_google_response, process_open_library_response
-from .genre_merger import merge_and_normalize
+# Supporting components
+from .sources import process_google_response, process_open_library_response
+from .utils import merge_and_normalize
 
 __all__ = [
-    # Primary interface
-    "GenreEnricher",
-    "CSVProcessor", 
-    "BookFeeder",
+    # Core data models
     "BookInfo",
     "EnrichedBook",
-    
-    # Analytics interface
     "BookAnalytics",
     "ReadingSession",
+    
+    # Main pipeline interface
+    "EnvironmentAwareBookPipeline",
+    "AdaptiveGenreEnricher",
     "AnalyticsCSVProcessor",
     "FinalJSONExporter",
     "create_dashboard_json",
-    "IntegratedBookPipeline",
-    "quick_pipeline",
-    "AsyncGenreEnricher",
-    "AsyncBookPipeline", 
-    "async_quick_pipeline",
     
-    # Internal components
-    "APICaller",
-    "fetch_google_data",
-    "fetch_open_library_data",
+    # Low-level components
+    "AsyncGenreEnricher",
     "process_google_response",
     "process_open_library_response",
     "merge_and_normalize"
