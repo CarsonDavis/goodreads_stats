@@ -1,0 +1,3 @@
+based on data/rereads.md
+
+ok. i now want to think about our final book information model. the idea is that i will make a dashboard to show book reading statistics over time, with things like average rating, my rating, dates started/finished, etc. since there is no way to know the dates of initial reads, this will horribly skew our numbers, so lets only use the latest date and also assume that the book has only been read once
