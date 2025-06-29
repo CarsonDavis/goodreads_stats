@@ -234,6 +234,15 @@ class ReadingDashboard {
             },
             options: {
                 ...this.getChartOptions(),
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const chartElement = elements[0];
+                        const index = chartElement.index;
+                        const rating = chartData[index][0];
+                        const uuid = this.getUuidFromUrl();
+                        window.location.href = `books.html?uuid=${uuid}&type=rating&value=${rating}`;
+                    }
+                },
                 plugins: {
                     legend: {
                         display: false
@@ -269,7 +278,7 @@ class ReadingDashboard {
                         const index = chartElement.index;
                         const genre = top10[index].genre;
                         const uuid = this.getUuidFromUrl();
-                        window.location.href = `genre.html?uuid=${uuid}&genre=${encodeURIComponent(genre)}`;
+                        window.location.href = `books.html?uuid=${uuid}&type=genre&value=${encodeURIComponent(genre)}`;
                     }
                 },
                 scales: {
@@ -319,7 +328,18 @@ class ReadingDashboard {
                     borderWidth: 1
                 }]
             },
-            options: this.getChartOptions()
+            options: {
+                ...this.getChartOptions(),
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const chartElement = elements[0];
+                        const index = chartElement.index;
+                        const year = years[index];
+                        const uuid = this.getUuidFromUrl();
+                        window.location.href = `books.html?uuid=${uuid}&type=pages-year&value=${year}`;
+                    }
+                }
+            }
         });
     }
 

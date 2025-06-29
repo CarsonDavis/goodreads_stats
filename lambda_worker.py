@@ -77,7 +77,9 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             'openlib_work_response': enriched_book.openlib_work_response,
             'processed_google_genres': enriched_book.processed_google_genres,
             'processed_openlib_genres': enriched_book.processed_openlib_genres,
-            'processing_log': enriched_book.processing_log
+            'processing_log': enriched_book.processing_log,
+            'thumbnail_url': enriched_book.thumbnail_url,
+            'small_thumbnail_url': enriched_book.small_thumbnail_url
         }
         
         logger.info(f"Successfully enriched: {len(enriched_book.final_genres)} final genres")

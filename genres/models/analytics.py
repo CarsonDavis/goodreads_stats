@@ -59,6 +59,10 @@ class BookAnalytics:
     # Enriched genre data (from our pipeline)
     final_genres: List[str] = field(default_factory=list)
     genre_enrichment_success: bool = False
+    
+    # Image/thumbnail data
+    thumbnail_url: Optional[str] = None
+    small_thumbnail_url: Optional[str] = None
 
     @property
     def read_count_for_analytics(self) -> int:
@@ -136,6 +140,9 @@ class BookAnalytics:
             "reading_status": self.reading_status,
             "bookshelves": self.bookshelves,
             "genres": self.final_genres,
+            # Images
+            "thumbnail_url": self.thumbnail_url,
+            "small_thumbnail_url": self.small_thumbnail_url,
             # Flags
             "has_review": bool(self.my_review and self.my_review.strip()),
             "genre_enriched": self.genre_enrichment_success,

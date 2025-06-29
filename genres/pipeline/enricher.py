@@ -117,6 +117,21 @@ class AsyncGenreEnricher:
                     google_genres = process_google_response(google_data)
                     enriched_book.processed_google_genres = google_genres
                     enriched_book.add_log(f"Google Books: {len(google_genres)} genres")
+                    
+                    # Extract thumbnails from Google Books response
+                    items = google_data.get("items", [])
+                    if items:
+                        volume_info = items[0].get("volumeInfo", {})
+                        image_links = volume_info.get("imageLinks", {})
+                        
+                        enriched_book.thumbnail_url = image_links.get("thumbnail")
+                        enriched_book.small_thumbnail_url = image_links.get("smallThumbnail")
+                        
+                        if enriched_book.thumbnail_url or enriched_book.small_thumbnail_url:
+                            enriched_book.add_log("Google Books: Thumbnails extracted")
+                        else:
+                            enriched_book.add_log("Google Books: No thumbnails available")
+                            
                 except Exception as e:
                     enriched_book.add_log(f"Google Books processing error: {e}")
             elif isinstance(google_data, Exception):
@@ -391,6 +406,8 @@ class AdaptiveGenreEnricher:
         enriched_book.processed_openlib_genres = lambda_response.get('processed_openlib_genres', [])
         enriched_book.final_genres = lambda_response.get('final_genres', [])
         enriched_book.processing_log = lambda_response.get('processing_log', [])
+        enriched_book.thumbnail_url = lambda_response.get('thumbnail_url')
+        enriched_book.small_thumbnail_url = lambda_response.get('small_thumbnail_url')
         
         return enriched_book
 

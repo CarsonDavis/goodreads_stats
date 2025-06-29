@@ -34,6 +34,10 @@ class EnrichedBook:
     processed_openlib_genres: List[str] = field(default_factory=list)
     final_genres: List[str] = field(default_factory=list)
     
+    # Image/thumbnail data
+    thumbnail_url: Optional[str] = None
+    small_thumbnail_url: Optional[str] = None
+    
     # Processing metadata
     processing_log: List[str] = field(default_factory=list)
     
@@ -58,5 +62,7 @@ class EnrichedBook:
             "openlib_genres_count": len(self.processed_openlib_genres),
             "final_genres_count": len(self.final_genres),
             "final_genres": self.final_genres,
+            "thumbnail_url": self.thumbnail_url,
+            "small_thumbnail_url": self.small_thumbnail_url,
             "processing_log": self.processing_log
         }

@@ -77,6 +77,8 @@ async def main():
             # Transfer enriched data back
             original_book.final_genres = enriched_item.final_genres
             original_book.genre_enrichment_success = len(enriched_item.final_genres) > 0
+            original_book.thumbnail_url = enriched_item.thumbnail_url
+            original_book.small_thumbnail_url = enriched_item.small_thumbnail_url
             enhanced_books.append(original_book)
         
         # Step 4: Create dashboard JSON
