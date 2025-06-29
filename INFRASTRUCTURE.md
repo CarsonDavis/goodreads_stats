@@ -2,72 +2,54 @@
 
 ## Overview
 
-The Goodreads Stats system supports **three execution modes**:
-1. **Local Simple Mode** - Static files + manual pipeline (current system)
-2. **Local API Mode** - FastAPI server for cloud API development 
-3. **Cloud Production** - AWS serverless architecture
+The Goodreads Stats system supports **two execution modes**:
+1. **Local Docker Development** - Dockerized FastAPI + frontend for local development
+2. **Cloud Production** - AWS serverless architecture
 
-The same frontend code works in all three modes with automatic environment detection.
+The same frontend code works in both modes with automatic environment detection.
 
 ---
 
 ## Architecture Comparison
 
-| Component | Local Simple | Local API | Cloud Production |
-|-----------|--------------|-----------|------------------|
-| **Frontend** | Static files (port 8000) | Static files (port 8000) | S3 + CloudFront |
-| **Processing** | Manual `python run_smart_pipeline.py` | FastAPI server (port 8001) | Lambda functions |
-| **Data Storage** | Local `dashboard_data/` | Local `dashboard_data/` | S3 bucket |
-| **APIs** | None | Local REST endpoints | API Gateway + Lambda |
-| **Environment Detection** | `localhost` (no API) | `localhost:8000` → `localhost:8001` | `codebycarson.com` → AWS |
+| Component | Local Docker | Cloud Production |
+|-----------|--------------|------------------|
+| **Frontend** | nginx:8000 | S3 + CloudFront |
+| **Processing** | FastAPI:8001 | Lambda functions |
+| **Data Storage** | Local `dashboard_data/` | S3 bucket |
+| **APIs** | Local REST endpoints | API Gateway + Lambda |
+| **Environment Detection** | `localhost:8000` → `localhost:8001` | `codebycarson.com` → AWS |
 
 ---
 
 ## Local Development
 
-### Mode 1: Simple Local (Current System)
+### Docker Development Setup
 
-**Use Case:** End users who want to process CSV locally
-
-**Setup:**
-```bash
-# 1. Process your CSV
-python run_smart_pipeline.py
-
-# 2. Serve dashboard  
-python -m http.server 8000
-
-# 3. Open browser
-open http://localhost:8000
-```
-
-**How it works:**
-- Upload page shows instructions (no actual processing)
-- User manually runs Python pipeline
-- Dashboard loads JSON from `dashboard_data/` folder
-- No API calls, purely static
-
-### Mode 2: Local API Development
-
-**Use Case:** Developers working on cloud features
+**Use Case:** Local development with full API integration
 
 **Setup:**
 ```bash
-# Terminal 1: Frontend
-python -m http.server 8000
-
-# Terminal 2: API Server  
-python local_server.py  # Runs on port 8001
+# Start both frontend and API
+docker-compose up -d
 
 # Open browser
 open http://localhost:8000
 ```
 
 **How it works:**
-- Frontend detects `localhost:8000` → makes API calls to `localhost:8001`
+- Frontend served by nginx on port 8000
+- API served by FastAPI on port 8001
 - Upload works like cloud (drag & drop → API processing)
 - FastAPI server uses existing Python pipeline locally
 - Same endpoints as cloud for development/testing
+
+**Manual Pipeline Option:**
+For advanced users who want to run the pipeline manually:
+```bash
+python run_smart_pipeline.py
+```
+However, this bypasses the coordinated frontend/upload system.
 
 ---
 
@@ -148,23 +130,15 @@ https://api.codebycarson.com/goodreads-stats/
 function detectEnvironment() {
     const host = window.location.host;
     
-    if (host === 'localhost:8000') {
+    if (host === 'localhost:8000' || host === '127.0.0.1:8000') {
         return {
-            mode: 'local-api',
-            apiBase: 'http://localhost:8001',
-            dataPath: null  // Uses API
-        };
-    } else if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
-        return {
-            mode: 'local-simple', 
-            apiBase: null,  // No API
-            dataPath: '../dashboard_data/'  // Local files
+            mode: 'local-docker',
+            apiBase: 'http://localhost:8001'
         };
     } else {
         return {
             mode: 'cloud',
-            apiBase: 'https://api.codebycarson.com/goodreads-stats',
-            dataPath: null  // Uses API
+            apiBase: 'https://api.codebycarson.com/goodreads-stats'
         };
     }
 }
@@ -172,22 +146,9 @@ function detectEnvironment() {
 
 ### Upload Flow by Environment
 
-#### Local Simple Mode
+#### Both Local Docker and Cloud Mode
 ```javascript
-// upload.js
-if (env.mode === 'local-simple') {
-    // Show instructions instead of processing
-    showInstructions(`
-        1. Save your CSV to data/ folder
-        2. Run: python run_smart_pipeline.py  
-        3. Open dashboard with generated UUID
-    `);
-}
-```
-
-#### Local API / Cloud Mode
-```javascript
-// upload.js - Same code for both!
+// upload.js - Same code for both environments!
 const formData = new FormData();
 formData.append('csv', file);
 
@@ -202,29 +163,9 @@ pollStatus(uuid);  // Check processing status
 
 ### Dashboard Loading by Environment
 
-#### Local Simple Mode
+#### Both Local Docker and Cloud Mode
 ```javascript
-// dashboard.js
-if (env.mode === 'local-simple') {
-    // Try multiple local paths
-    const paths = [
-        `${env.dataPath}${uuid}.json`,
-        `./dashboard_data/${uuid}.json`,
-        `../dashboard_data/${uuid}.json`
-    ];
-    
-    for (const path of paths) {
-        try {
-            const response = await fetch(path);
-            if (response.ok) return response.json();
-        } catch (e) { continue; }
-    }
-}
-```
-
-#### Local API / Cloud Mode  
-```javascript
-// dashboard.js - Same code for both!
+// dashboard.js - Same code for both environments!
 const response = await fetch(`${env.apiBase}/data/${uuid}`);
 return response.json();
 ```
@@ -283,7 +224,9 @@ file: goodreads_export.csv
 }
 ```
 
-### DELETE /data/{uuid} (Optional)
+### DELETE /data/{uuid}
+**Use Case:** Allow users to delete their processed data from the system
+
 **Response:**
 ```json
 {
@@ -291,6 +234,10 @@ file: goodreads_export.csv
     "deleted_files": ["dashboard.json", "status.json", "raw.csv"]
 }
 ```
+
+**Error Responses:**
+- `404`: No data found to delete
+- `500`: Deletion failed
 
 ---
 
@@ -387,22 +334,54 @@ goodreads_stats/
 
 ---
 
+## Data Management Features
+
+### Data Deletion
+Users can delete their processed data at any time from the dashboard:
+
+#### **Local Docker Environment**
+- **Delete button**: Available on main dashboard page
+- **What gets deleted**: 
+  - Dashboard JSON file (`dashboard_data/{uuid}.json`)
+  - Processing status (in-memory)
+  - Any temporary upload files
+- **Confirmation**: Required before deletion
+- **Redirect**: After deletion, user redirected to upload page
+
+#### **Cloud Production Environment**
+- **Delete button**: Same UI as local
+- **What gets deleted**:
+  - Dashboard JSON (`goodreads-stats-data/{uuid}.json`)
+  - Processing status (`goodreads-stats-status/{uuid}.json`)
+  - Original CSV upload (`goodreads-stats-uploads/{uuid}/`)
+- **Lambda function**: Handles S3 object deletion
+- **Confirmation**: Required before deletion
+
+#### **Security Model**
+- **UUID-based deletion**: Users can only delete data they have the UUID for
+- **No authentication required**: UUID serves as the access token
+- **Immediate deletion**: No recovery option once confirmed
+
+---
+
 ## Security & Privacy
 
 ### Data Handling
-- **CSV uploads**: Stored temporarily in S3, deleted after processing
-- **Dashboard JSON**: Stored permanently in S3 (user can delete)
+- **CSV uploads**: Stored temporarily, deleted after processing or on user request
+- **Dashboard JSON**: Stored until user deletion or system cleanup
 - **No user accounts**: Anonymous processing only
-- **UUID-based access**: Only users with UUID can access their data
+- **UUID-based access**: Only users with UUID can access or delete their data
+- **User-controlled deletion**: Full data removal available at any time
 
 ### API Security
 - **CORS**: Restricted to codebycarson.com domain
 - **Rate limiting**: 10 requests per minute per IP
 - **File validation**: CSV format and size limits (50MB max)
 - **No API keys required**: Public endpoints with usage limits
+- **UUID-based permissions**: Users can only manage data they have UUIDs for
 
 ### AWS Permissions
-- **Lambda execution role**: Read/write to specific S3 buckets only
+- **Lambda execution role**: Read/write/delete to specific S3 buckets only
 - **S3 bucket policy**: Public read for dashboard JSONs, private for uploads
 - **API Gateway**: No authentication required for simplicity
 

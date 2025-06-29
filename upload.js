@@ -1,7 +1,25 @@
 class CSVUploader {
     constructor() {
+        this.env = this.detectEnvironment();
+        console.log('Environment detected:', this.env);
         this.setupElements();
         this.setupEventListeners();
+    }
+
+    detectEnvironment() {
+        const host = window.location.host;
+        
+        if (host === 'localhost:8000' || host === '127.0.0.1:8000') {
+            return {
+                mode: 'local-docker',
+                apiBase: 'http://localhost:8001'
+            };
+        } else {
+            return {
+                mode: 'cloud',
+                apiBase: 'https://api.codebycarson.com/goodreads-stats'
+            };
+        }
     }
 
     setupElements() {
@@ -60,34 +78,94 @@ class CSVUploader {
         this.showProcessing();
 
         try {
-            // Read and process the CSV file
-            const csvText = await this.readFile(file);
-            this.updateProgress(25, 'Parsing CSV data...');
-            
-            const books = this.parseCSV(csvText);
-            this.updateProgress(50, 'Enriching book data...');
-            
-            const enrichedData = await this.enrichBooks(books);
-            this.updateProgress(75, 'Generating dashboard...');
-            
-            const dashboardData = this.createDashboardData(enrichedData);
-            this.updateProgress(90, 'Saving results...');
-            
-            const uuid = this.generateUUID();
-            await this.saveDashboardData(uuid, dashboardData);
-            
-            this.updateProgress(100, 'Complete!');
-            
-            // Redirect to dashboard
-            setTimeout(() => {
-                window.location.href = `dashboard/?uuid=${uuid}`;
-            }, 1000);
-
+            // Always use API for both local-docker and cloud modes
+            await this.processViaAPI(file);
         } catch (error) {
             console.error('Processing error:', error);
-            this.showError('Failed to process your file. Please check that it\'s a valid Goodreads CSV export.');
+            this.showError(`Failed to process your file: ${error.message}`);
             this.showUpload();
         }
+    }
+
+    // Removed local simple mode instructions
+
+    async processViaAPI(file) {
+        // Upload file to API
+        this.updateProgress(10, 'Uploading file...');
+        
+        const formData = new FormData();
+        formData.append('csv', file);
+        
+        const uploadResponse = await fetch(`${this.env.apiBase}/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json().catch(() => ({ detail: 'Upload failed' }));
+            throw new Error(errorData.detail || 'Upload failed');
+        }
+        
+        const { uuid } = await uploadResponse.json();
+        console.log('Upload successful, UUID:', uuid);
+        
+        // Poll for completion
+        await this.pollForCompletion(uuid);
+        
+        // Redirect to dashboard
+        this.updateProgress(100, 'Complete!');
+        setTimeout(() => {
+            window.location.href = `dashboard/?uuid=${uuid}`;
+        }, 1000);
+    }
+
+    async pollForCompletion(uuid) {
+        const maxAttempts = 120; // 10 minutes max
+        let attempts = 0;
+        
+        while (attempts < maxAttempts) {
+            try {
+                const statusResponse = await fetch(`${this.env.apiBase}/status/${uuid}`);
+                
+                if (!statusResponse.ok) {
+                    throw new Error('Failed to check status');
+                }
+                
+                const status = await statusResponse.json();
+                
+                if (status.status === 'complete') {
+                    this.updateProgress(95, 'Processing complete!');
+                    return;
+                } else if (status.status === 'error') {
+                    throw new Error(status.error_message || 'Processing failed');
+                } else if (status.status === 'processing') {
+                    // Update progress based on API response
+                    const progress = status.progress || {};
+                    const percent = Math.max(20, Math.min(90, progress.percent_complete || 20));
+                    const message = status.message || 
+                        `Processing... ${progress.processed_books || 0}/${progress.total_books || '?'} books`;
+                    
+                    this.updateProgress(percent, message);
+                }
+                
+                // Wait 5 seconds before next poll
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                attempts++;
+                
+            } catch (error) {
+                console.error('Status check error:', error);
+                attempts++;
+                
+                if (attempts >= maxAttempts) {
+                    throw error;
+                }
+                
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+        }
+        
+        throw new Error('Processing timed out. Please try again.');
     }
 
     validateFile(file) {
@@ -167,114 +245,8 @@ class CSVUploader {
         return values;
     }
 
-    async enrichBooks(books) {
-        // For now, return a simplified version
-        // In a full implementation, this would call the Python pipeline
-        return books.map(book => ({
-            title: book.Title || '',
-            author: book.Author || '',
-            my_rating: parseInt(book['My Rating']) || 0,
-            date_read: book['Date Read'] || '',
-            num_pages: parseInt(book['Number of Pages']) || 0,
-            publisher: book.Publisher || '',
-            isbn: book.ISBN || book.ISBN13 || '',
-            goodreads_id: book['Book Id'] || Math.random().toString(36).substr(2, 9),
-            reading_year: book['Date Read'] ? new Date(book['Date Read']).getFullYear() : null,
-            genres: book.Bookshelves ? book.Bookshelves.split(',').map(g => g.trim()) : []
-        }));
-    }
-
-    createDashboardData(books) {
-        const totalBooks = books.length;
-        const totalPages = books.reduce((sum, book) => sum + (book.num_pages || 0), 0);
-        const ratedBooks = books.filter(book => book.my_rating > 0);
-        const avgRating = ratedBooks.length > 0 
-            ? (ratedBooks.reduce((sum, book) => sum + book.my_rating, 0) / ratedBooks.length).toFixed(1)
-            : 0;
-        
-        const genreSet = new Set();
-        books.forEach(book => {
-            if (book.genres) {
-                book.genres.forEach(genre => genreSet.add(genre));
-            }
-        });
-
-        const yearSet = new Set(books.map(book => book.reading_year).filter(year => year));
-
-        return {
-            metadata: {
-                total_books: totalBooks,
-                total_pages: totalPages,
-                avg_rating: parseFloat(avgRating),
-                unique_genres: genreSet.size,
-                reading_years: yearSet.size,
-                generated_at: new Date().toISOString()
-            },
-            books: books
-        };
-    }
-
-    generateUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            const r = Math.random() * 16 | 0;
-            const v = c == 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
-
-    async saveDashboardData(uuid, data) {
-        // Since this is a client-side app, we can't actually save to the server
-        // Instead, we'll provide instructions to the user on how to process their file
-        
-        // For now, create a download link for the processed data
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        // Create download link
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${uuid}.json`;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        
-        // Show instructions instead of redirecting
-        this.showInstructions(uuid, url);
-        
-        // Simulate processing time
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    showInstructions(uuid, downloadUrl) {
-        // Replace the processing content with instructions
-        this.processingContent.innerHTML = `
-            <div class="text-center">
-                <div class="text-5xl mb-4">📋</div>
-                <h3 class="text-xl font-bold text-gray-700 mb-4">Processing Complete!</h3>
-                <p class="text-gray-600 mb-6">Your dashboard data has been generated. To get the full experience with enriched genre data:</p>
-                
-                <div class="bg-gray-50 p-4 rounded-lg mb-6">
-                    <h4 class="font-semibold mb-2">For Full Processing:</h4>
-                    <ol class="text-sm text-gray-600 text-left space-y-1">
-                        <li>1. Clone this repository</li>
-                        <li>2. Place your CSV in the <code>data/</code> folder</li>
-                        <li>3. Run <code>python run_smart_pipeline.py</code></li>
-                        <li>4. Open the dashboard with your UUID</li>
-                    </ol>
-                </div>
-                
-                <div class="space-x-4">
-                    <a href="${downloadUrl}" download="${uuid}.json" 
-                       class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                        Download Basic Data
-                    </a>
-                    <button onclick="location.reload()" 
-                            class="bg-gray-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors">
-                        Upload Another File
-                    </button>
-                </div>
-            </div>
-        `;
-    }
+    // These methods are no longer needed as we use the API
+    // Keeping them for backwards compatibility with local-simple mode
 
     showProcessing() {
         this.uploadContent.classList.add('hidden');

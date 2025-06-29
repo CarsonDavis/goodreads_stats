@@ -92,7 +92,7 @@ class BookDetailPage {
         const averageRating = book.average_rating ? `${book.average_rating.toFixed(2)}/5` : 'No average rating';
 
         const genres = book.genres && book.genres.length > 0 
-            ? book.genres.map(genre => `<span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-sm">${this.escapeHtml(genre)}</span>`).join(' ')
+            ? book.genres.map(genre => `<a href="books.html?uuid=${this.uuid}&type=genre&value=${encodeURIComponent(genre)}" class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors cursor-pointer inline-block">${this.escapeHtml(genre)}</a>`).join(' ')
             : '<span class="text-gray-500">No genres</span>';
 
         const thumbnailSection = book.thumbnail_url ? `

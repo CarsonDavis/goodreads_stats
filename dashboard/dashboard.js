@@ -4,8 +4,26 @@ class ReadingDashboard {
         this.data = null;
         this.charts = {};
         this.isDarkMode = localStorage.getItem('darkMode') === 'true';
+        this.env = this.detectEnvironment();
         
+        console.log('Environment detected:', this.env);
         this.init();
+    }
+
+    detectEnvironment() {
+        const host = window.location.host;
+        
+        if (host === 'localhost:8000' || host === '127.0.0.1:8000') {
+            return {
+                mode: 'local-docker',
+                apiBase: 'http://localhost:8001'
+            };
+        } else {
+            return {
+                mode: 'cloud',
+                apiBase: 'https://api.codebycarson.com/goodreads-stats'
+            };
+        }
     }
 
     async init() {
@@ -37,7 +55,30 @@ class ReadingDashboard {
     }
 
     setupEventListeners() {
-        // Add any additional event listeners here
+        // Delete data functionality
+        const deleteButton = document.getElementById('deleteDataButton');
+        const deleteModal = document.getElementById('deleteModal');
+        const cancelDelete = document.getElementById('cancelDelete');
+        const confirmDelete = document.getElementById('confirmDelete');
+
+        deleteButton?.addEventListener('click', () => {
+            this.showDeleteModal();
+        });
+
+        cancelDelete?.addEventListener('click', () => {
+            this.hideDeleteModal();
+        });
+
+        confirmDelete?.addEventListener('click', () => {
+            this.deleteData();
+        });
+
+        // Close modal on background click
+        deleteModal?.addEventListener('click', (e) => {
+            if (e.target === deleteModal) {
+                this.hideDeleteModal();
+            }
+        });
     }
 
     async loadData() {
@@ -49,35 +90,53 @@ class ReadingDashboard {
                 throw new Error('No UUID provided in URL. Expected format: /dashboard/uuid or ?uuid=...');
             }
 
-            // Check if we're in local development
-            const isLocal = window.location.protocol === 'file:' || 
-                           window.location.hostname === 'localhost' || 
-                           window.location.hostname === '127.0.0.1';
-
-            let dataUrl;
-            
-            if (isLocal) {
-                // Local development - load specific UUID file
-                dataUrl = this.getLocalDataUrl(uuid);
-            } else {
-                // Production - load from S3 with UUID
-                dataUrl = this.getProductionDataUrl(uuid);
-            }
-
-            console.log('Loading data from:', dataUrl);
-            
-            const response = await fetch(dataUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            this.data = await response.json();
-            console.log('Data loaded successfully:', this.data);
+            // Always use API for both local-docker and cloud modes
+            await this.loadDataFromAPI(uuid);
             
         } catch (error) {
             console.error('Error loading data:', error);
             this.data = null;
         }
+    }
+
+    // Removed local file loading - only API mode supported
+
+    async loadDataFromAPI(uuid) {
+        console.log(`Loading data from API: ${this.env.apiBase}/data/${uuid}`);
+        
+        const response = await fetch(`${this.env.apiBase}/data/${uuid}`);
+        
+        if (response.status === 202) {
+            // Still processing
+            this.showProcessingMessage();
+            return;
+        }
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Data not found. Please check the UUID or wait for processing to complete.');
+            }
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        this.data = await response.json();
+        console.log('Data loaded successfully from API');
+    }
+
+    showProcessingMessage() {
+        const container = document.getElementById('dashboard-container');
+        container.innerHTML = `
+            <div class="text-center py-12">
+                <div class="text-6xl mb-4">⏳</div>
+                <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4">Still Processing</h2>
+                <p class="text-gray-600 dark:text-gray-400 mb-6">Your data is still being processed. This usually takes 5-10 minutes.</p>
+                <button onclick="location.reload()" 
+                        class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                    Refresh Page
+                </button>
+            </div>
+        `;
     }
 
     getUuidFromUrl() {
@@ -109,26 +168,7 @@ class ReadingDashboard {
         return null;
     }
 
-    getLocalDataUrl(uuid) {
-        // Local development - try multiple paths for UUID file
-        const possiblePaths = [
-            `../dashboard_data/${uuid}.json`,
-            `./dashboard_data/${uuid}.json`, 
-            `dashboard_data/${uuid}.json`,
-            `../${uuid}.json`,
-            `./${uuid}.json`,
-            `${uuid}.json`
-        ];
-        
-        // Return the first path for now - we'll try them in sequence if needed
-        return possiblePaths[0];
-    }
-
-    getProductionDataUrl(uuid) {
-        // Production - S3 bucket with UUID filename
-        const baseUrl = window.S3_BASE_URL || 'https://your-bucket.s3.amazonaws.com';
-        return `${baseUrl}/${uuid}.json`;
-    }
+    // These methods are replaced by the new environment-aware loading
 
     renderDashboard() {
         this.hideLoading();
@@ -159,7 +199,6 @@ class ReadingDashboard {
         document.getElementById('totalPages').textContent = (summary.total_pages || 0).toLocaleString();
         document.getElementById('avgRating').textContent = summary.average_rating ? 
             summary.average_rating.toFixed(1) : 'N/A';
-        document.getElementById('uniqueGenres').textContent = summary.unique_genres || 0;
         document.getElementById('readingYears').textContent = summary.reading_years ? 
             summary.reading_years.length : 0;
 
@@ -429,6 +468,97 @@ class ReadingDashboard {
             month: 'short',
             day: 'numeric'
         });
+    }
+
+    showDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal?.classList.remove('hidden');
+    }
+
+    hideDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal?.classList.add('hidden');
+    }
+
+    async deleteData() {
+        const uuid = this.getUuidFromUrl();
+        if (!uuid) {
+            this.showDeleteError('No UUID found');
+            return;
+        }
+
+        try {
+            // Show loading state on confirm button
+            const confirmButton = document.getElementById('confirmDelete');
+            confirmButton.textContent = 'Deleting...';
+            confirmButton.disabled = true;
+
+            // Make DELETE request
+            const response = await fetch(`${this.env.apiBase}/data/${uuid}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Delete successful:', result);
+                
+                // Hide modal and show success message
+                this.hideDeleteModal();
+                this.showDeleteSuccess();
+                
+                // Redirect to upload page after a short delay
+                setTimeout(() => {
+                    window.location.href = '../';
+                }, 2000);
+            } else {
+                const errorData = await response.json().catch(() => ({ message: 'Delete failed' }));
+                throw new Error(errorData.message || `HTTP ${response.status}`);
+            }
+
+        } catch (error) {
+            console.error('Delete failed:', error);
+            this.showDeleteError(error.message);
+            
+            // Reset button state
+            const confirmButton = document.getElementById('confirmDelete');
+            confirmButton.textContent = 'Delete Forever';
+            confirmButton.disabled = false;
+        }
+    }
+
+    showDeleteSuccess() {
+        // Replace dashboard content with success message
+        const dashboardContainer = document.getElementById('dashboard');
+        dashboardContainer.innerHTML = `
+            <div class="text-center py-20">
+                <div class="text-6xl mb-4">✅</div>
+                <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4">Data Deleted Successfully</h2>
+                <p class="text-gray-600 dark:text-gray-400 mb-6">Your reading data has been permanently removed.</p>
+                <p class="text-gray-500 dark:text-gray-500">Redirecting to upload page...</p>
+            </div>
+        `;
+    }
+
+    showDeleteError(message) {
+        // Show error in modal or as notification
+        this.hideDeleteModal();
+        
+        // Create temporary error notification
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+        errorDiv.innerHTML = `
+            <div class="flex items-center">
+                <span class="mr-2">❌</span>
+                <span>Delete failed: ${message}</span>
+            </div>
+        `;
+        
+        document.body.appendChild(errorDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            errorDiv.remove();
+        }, 5000);
     }
 }
 
