@@ -18,7 +18,7 @@ The same frontend code works in both modes with automatic environment detection.
 | **Processing** | FastAPI:8001 | Lambda functions |
 | **Data Storage** | Local `dashboard_data/` | S3 bucket |
 | **APIs** | Local REST endpoints | API Gateway + Lambda |
-| **Environment Detection** | `localhost:8000` → `localhost:8001` | `codebycarson.com` → AWS |
+| **Environment Detection** | `localhost:8000` → `localhost:8001` | `goodreads-stats.codebycarson.com` → AWS |
 
 ---
 
@@ -63,7 +63,7 @@ However, this bypasses the coordinated frontend/upload system.
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                │
 │  Frontend (S3 + CloudFront)                                   │
-│  ├── codebycarson.com/goodreads-stats/                        │
+│  ├── goodreads-stats.codebycarson.com                         │
 │  ├── Static HTML/CSS/JS files                                 │
 │  └── Environment detection → API calls                        │
 │                           ↓                                    │
@@ -113,7 +113,7 @@ goodreads-stats-delete       # Data cleanup (optional)
 
 #### API Gateway
 ```
-https://api.codebycarson.com/goodreads-stats/
+https://goodreads-stats.codebycarson.com/api/
 ├── POST   /upload          # File upload endpoint
 ├── GET    /status/{uuid}   # Check processing status  
 ├── GET    /data/{uuid}     # Get dashboard JSON (redirects to S3)
@@ -137,8 +137,8 @@ function detectEnvironment() {
         };
     } else {
         return {
-            mode: 'cloud',
-            apiBase: 'https://api.codebycarson.com/goodreads-stats'
+            mode: 'production',
+            apiBase: 'https://goodreads-stats.codebycarson.com/api'
         };
     }
 }
@@ -374,7 +374,7 @@ Users can delete their processed data at any time from the dashboard:
 - **User-controlled deletion**: Full data removal available at any time
 
 ### API Security
-- **CORS**: Restricted to codebycarson.com domain
+- **CORS**: Restricted to goodreads-stats.codebycarson.com and goodreads-stats-dev.codebycarson.com domains
 - **Rate limiting**: 10 requests per minute per IP
 - **File validation**: CSV format and size limits (50MB max)
 - **No API keys required**: Public endpoints with usage limits

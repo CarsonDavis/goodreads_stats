@@ -402,14 +402,14 @@ jobs:
           
       - name: Deploy to S3
         run: |
-          aws s3 sync dashboard/ s3://codebycarson.com/goodreads-stats/ \
+          aws s3 sync dashboard/ s3://goodreads-stats.codebycarson.com/ \
             --delete \
             --cache-control "max-age=31536000" \
             --exclude "*.html" \
             --exclude "*.js"
             
           # HTML and JS files with shorter cache
-          aws s3 sync dashboard/ s3://codebycarson.com/goodreads-stats/ \
+          aws s3 sync dashboard/ s3://goodreads-stats.codebycarson.com/ \
             --cache-control "max-age=300" \
             --include "*.html" \
             --include "*.js"
@@ -512,7 +512,7 @@ cdk deploy --all
 
 # 4. Deploy frontend manually (first time)
 ./deployment/build-frontend.sh
-aws s3 sync dashboard/ s3://codebycarson.com/goodreads-stats/
+aws s3 sync dashboard/ s3://goodreads-stats.codebycarson.com/
 ```
 
 ### Development Workflow
@@ -750,10 +750,10 @@ timeout=Duration.minutes(15)
 **3. CORS Issues:**
 ```bash
 # Test CORS headers
-curl -H "Origin: https://codebycarson.com" \
+curl -H "Origin: https://goodreads-stats.codebycarson.com" \
      -H "Access-Control-Request-Method: POST" \
      -X OPTIONS \
-     https://api.codebycarson.com/goodreads-stats/upload
+     https://goodreads-stats.codebycarson.com/api/upload
 ```
 
 **4. S3 Permissions:**

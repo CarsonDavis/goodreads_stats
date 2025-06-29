@@ -14,6 +14,16 @@ class CSVUploader {
                 mode: 'local-docker',
                 apiBase: 'http://localhost:8001'
             };
+        } else if (host.includes('goodreads-stats-dev.codebycarson.com')) {
+            return {
+                mode: 'development',
+                apiBase: 'https://goodreads-stats-dev.codebycarson.com/api'
+            };
+        } else if (host.includes('goodreads-stats.codebycarson.com')) {
+            return {
+                mode: 'production',
+                apiBase: 'https://goodreads-stats.codebycarson.com/api'
+            };
         } else {
             return {
                 mode: 'cloud',
