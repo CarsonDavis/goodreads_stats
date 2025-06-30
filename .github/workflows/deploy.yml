@@ -144,9 +144,13 @@ jobs:
         run: |
           BUCKET="${{ steps.bucket.outputs.bucket }}"
           
-          # Sync files with appropriate cache headers
+          # Deploy root upload page
+          aws s3 cp index.html s3://$BUCKET/index.html \
+            --cache-control "max-age=300"
+          
+          # Deploy dashboard files to /dashboard/ folder
           # Static assets with long cache
-          aws s3 sync dashboard/ s3://$BUCKET/ \
+          aws s3 sync dashboard/ s3://$BUCKET/dashboard/ \
             --delete \
             --cache-control "max-age=31536000" \
             --exclude "*.html" \
@@ -154,7 +158,7 @@ jobs:
             --exclude "*.json"
             
           # HTML and JS files with shorter cache
-          aws s3 sync dashboard/ s3://$BUCKET/ \
+          aws s3 sync dashboard/ s3://$BUCKET/dashboard/ \
             --cache-control "max-age=300" \
             --include "*.html" \
             --include "*.js"
