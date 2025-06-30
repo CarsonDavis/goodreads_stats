@@ -546,16 +546,16 @@ class ReadingDashboard {
     }
 }
 
-// Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     const dashboard = new ReadingDashboard();
+    dashboard.init();
     
     // Handle View All Books button
     const viewAllBooksBtn = document.getElementById('viewAllBooksBtn');
     if (viewAllBooksBtn) {
         viewAllBooksBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const uuid = dashboard.getUuidFromUrl();
+            const uuid = getUuidFromUrl();
             if (uuid) {
                 window.location.href = `books?uuid=${uuid}&type=all&value=all`;
             }
