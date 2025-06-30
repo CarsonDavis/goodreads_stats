@@ -140,6 +140,22 @@ jobs:
             echo "bucket=goodreads-stats-website-$ENV" >> $GITHUB_OUTPUT
           fi
           
+      - name: Sync sample dashboard data to S3
+        run: |
+          DATA_BUCKET="${{ needs.deploy-infrastructure.outputs.data-bucket }}"
+          SAMPLE_FILE="759f8950-6946-4101-9c16-2aafc54d672d.json"
+          
+          # Upload the sample dashboard data file
+          if [ -f "dashboard_data/$SAMPLE_FILE" ]; then
+            echo "Syncing sample dashboard data to s3://$DATA_BUCKET/data/"
+            aws s3 cp "dashboard_data/$SAMPLE_FILE" "s3://$DATA_BUCKET/data/$SAMPLE_FILE" \
+              --cache-control "max-age=300" \
+              --content-type "application/json"
+            echo "Sample dashboard data sync completed"
+          else
+            echo "Sample file $SAMPLE_FILE not found in dashboard_data/"
+          fi
+          
       - name: Deploy to S3
         run: |
           BUCKET="${{ steps.bucket.outputs.bucket }}"
