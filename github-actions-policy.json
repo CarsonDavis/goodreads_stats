@@ -63,6 +63,8 @@
                 "s3:ListBucket"
             ],
             "Resource": [
+                "arn:aws:s3:::goodreads-stats",
+                "arn:aws:s3:::goodreads-stats-*",
                 "arn:aws:s3:::goodreads-stats/*",
                 "arn:aws:s3:::goodreads-stats-*/*",
                 "arn:aws:s3:::cdk-*/*"
