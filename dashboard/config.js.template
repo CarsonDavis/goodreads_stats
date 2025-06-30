@@ -1,0 +1,50 @@
+// Configuration injected at deployment time
+window.GOODREADS_CONFIG = {
+    API_BASE_URL: "${API_GATEWAY_URL}",
+    S3_DATA_BUCKET: "${S3_DATA_BUCKET}",
+    ENVIRONMENT: "${ENVIRONMENT}",
+    VERSION: "${BUILD_VERSION}"
+};
+
+// Environment detection function
+function detectEnvironment() {
+    // Production environment
+    if (window.GOODREADS_CONFIG?.ENVIRONMENT === 'prod') {
+        return {
+            mode: 'cloud-production',
+            apiBase: window.GOODREADS_CONFIG.API_BASE_URL,
+            dataBucket: window.GOODREADS_CONFIG.S3_DATA_BUCKET
+        };
+    }
+    
+    // Development environment
+    if (window.GOODREADS_CONFIG?.ENVIRONMENT === 'dev') {
+        return {
+            mode: 'cloud-development',
+            apiBase: window.GOODREADS_CONFIG.API_BASE_URL,
+            dataBucket: window.GOODREADS_CONFIG.S3_DATA_BUCKET
+        };
+    }
+    
+    // Local development environments
+    const host = window.location.host;
+    
+    if (host === 'localhost:8000') {
+        return {
+            mode: 'local-api',
+            apiBase: 'http://localhost:8001',
+            dataBucket: null
+        };
+    } else if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
+        return {
+            mode: 'local-simple',
+            apiBase: null,
+            dataPath: '../dashboard_data/'
+        };
+    }
+    
+    throw new Error(`Unknown environment: ${host}`);
+}
+
+// Export for use in other modules
+window.GOODREADS_ENV = detectEnvironment();

@@ -1,0 +1,199 @@
+name: Deploy Goodreads Stats
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+        - prod
+        - dev
+
+env:
+  AWS_REGION: us-east-1
+  
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    outputs:
+      api-url: ${{ steps.deploy-cdk.outputs.api-url }}
+      data-bucket: ${{ steps.deploy-cdk.outputs.data-bucket }}
+      distribution-id: ${{ steps.deploy-cdk.outputs.distribution-id }}
+      website-url: ${{ steps.deploy-cdk.outputs.website-url }}
+      environment: ${{ steps.env.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event.inputs.environment }}" != "" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Setup Node.js for CDK
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Install CDK dependencies
+        working-directory: ./cdk
+        run: |
+          npm install -g aws-cdk
+          pip install -r requirements.txt
+          
+      - name: Copy shared pipeline code for Lambda layer
+        run: |
+          # Create shared directory and copy the genres directory
+          mkdir -p cdk/lambda_code/shared/
+          cp -r genres cdk/lambda_code/shared/
+          
+          # Copy main requirements.txt to shared layer if it exists
+          if [ -f "requirements.txt" ]; then
+            cp requirements.txt cdk/lambda_code/shared/
+          fi
+          
+      - name: Deploy CDK stacks
+        id: deploy-cdk
+        working-directory: ./cdk
+        env:
+          ENVIRONMENT: ${{ steps.env.outputs.environment }}
+        run: |
+          # Bootstrap CDK if needed
+          cdk bootstrap --context environment=$ENVIRONMENT || true
+          
+          # Deploy all stacks
+          cdk deploy --all --require-approval never --outputs-file outputs.json --context environment=$ENVIRONMENT
+          
+          # Extract outputs using simpler approach
+          STACK_PREFIX="GoodreadsStats-$(echo $ENVIRONMENT | sed 's/./\u&/')"
+          API_URL=$(cat outputs.json | jq -r --arg prefix "$STACK_PREFIX" '.[$prefix + "-Api"].ApiUrl // empty')
+          DATA_BUCKET=$(cat outputs.json | jq -r --arg prefix "$STACK_PREFIX" '.[$prefix + "-Storage"].DataBucketName // empty')
+          DISTRIBUTION_ID=$(cat outputs.json | jq -r --arg prefix "$STACK_PREFIX" '.[$prefix + "-Frontend"].DistributionId // empty')
+          WEBSITE_URL=$(cat outputs.json | jq -r --arg prefix "$STACK_PREFIX" '.[$prefix + "-Frontend"].WebsiteUrl // empty')
+          
+          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
+          echo "data-bucket=$DATA_BUCKET" >> $GITHUB_OUTPUT
+          echo "distribution-id=$DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+          echo "website-url=$WEBSITE_URL" >> $GITHUB_OUTPUT
+          
+          echo "Deployed to environment: $ENVIRONMENT"
+          echo "API URL: $API_URL"
+          echo "Website URL: $WEBSITE_URL"
+
+  deploy-frontend:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Build frontend configuration
+        run: |
+          # Create config.js from template if it exists
+          if [ -f "dashboard/config.js.template" ]; then
+            cp dashboard/config.js.template dashboard/config.js
+            
+            # Inject values
+            sed -i "s|\${API_GATEWAY_URL}|${{ needs.deploy-infrastructure.outputs.api-url }}|g" dashboard/config.js
+            sed -i "s|\${S3_DATA_BUCKET}|${{ needs.deploy-infrastructure.outputs.data-bucket }}|g" dashboard/config.js
+            sed -i "s|\${ENVIRONMENT}|${{ needs.deploy-infrastructure.outputs.environment }}|g" dashboard/config.js
+            sed -i "s|\${BUILD_VERSION}|${{ github.sha }}|g" dashboard/config.js
+            
+            echo "Generated config.js:"
+            cat dashboard/config.js
+          fi
+          
+      - name: Determine S3 bucket for frontend
+        id: bucket
+        run: |
+          ENV="${{ needs.deploy-infrastructure.outputs.environment }}"
+          if [ "$ENV" = "prod" ]; then
+            echo "bucket=goodreads-stats-website-prod" >> $GITHUB_OUTPUT
+          else
+            echo "bucket=goodreads-stats-website-$ENV" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Deploy to S3
+        run: |
+          BUCKET="${{ steps.bucket.outputs.bucket }}"
+          
+          # Sync files with appropriate cache headers
+          # Static assets with long cache
+          aws s3 sync dashboard/ s3://$BUCKET/ \
+            --delete \
+            --cache-control "max-age=31536000" \
+            --exclude "*.html" \
+            --exclude "*.js" \
+            --exclude "*.json"
+            
+          # HTML and JS files with shorter cache
+          aws s3 sync dashboard/ s3://$BUCKET/ \
+            --cache-control "max-age=300" \
+            --include "*.html" \
+            --include "*.js"
+            
+          echo "Deployed frontend to s3://$BUCKET/"
+            
+      - name: Invalidate CloudFront
+        if: needs.deploy-infrastructure.outputs.distribution-id != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.deploy-infrastructure.outputs.distribution-id }} \
+            --paths "/*"
+          echo "CloudFront invalidation created"
+          
+      - name: Summary
+        run: |
+          echo "🚀 Deployment completed successfully!"
+          echo "Environment: ${{ needs.deploy-infrastructure.outputs.environment }}"
+          echo "Website: ${{ needs.deploy-infrastructure.outputs.website-url }}"
+          echo "API: ${{ needs.deploy-infrastructure.outputs.api-url }}"
+          echo "S3 Bucket: ${{ steps.bucket.outputs.bucket }}"
+          
+          # Post to GitHub summary
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # Goodreads Stats Deployment Summary
+          
+          **Environment:** ${{ steps.env.outputs.environment }}
+          **Website URL:** ${{ needs.deploy-infrastructure.outputs.website-url }}
+          **API URL:** ${{ needs.deploy-infrastructure.outputs.api-url }}
+          **S3 Bucket:** ${{ steps.bucket.outputs.bucket }}
+          **Git SHA:** ${{ github.sha }}
+          
+          ## Next Steps
+          - Test the website at the URL above
+          - Check CloudWatch logs for any issues
+          - Monitor costs in AWS console
+          EOF
