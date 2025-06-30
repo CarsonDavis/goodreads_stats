@@ -97,8 +97,7 @@ class StorageStack(Stack):
                     ignore_public_acls=True,
                     restrict_public_buckets=False  # Allow OAI access
                 ),
-                website_index_document="index.html",
-                website_error_document="404.html",
+                # No website configuration for OAI setup
                 removal_policy=RemovalPolicy.RETAIN
             )
         else:
