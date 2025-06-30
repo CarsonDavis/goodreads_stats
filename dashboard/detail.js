@@ -4,12 +4,13 @@ class BookDetailPage {
         this.bookId = null;
         this.uuid = null;
         this.returnUrl = null;
+        this.env = ENV; // Use the global ENV from utils.js
         this.init();
     }
 
     async init() {
         this.getUrlParams();
-        await this.loadData();
+        this.data = await loadDataForUuid(this.uuid); // Use shared loadDataForUuid
         if (this.data && this.bookId) {
             this.renderBookDetails();
         } else {
@@ -20,30 +21,10 @@ class BookDetailPage {
     getUrlParams() {
         const urlParams = new URLSearchParams(window.location.search);
         this.bookId = urlParams.get('id'); // goodreads_id
-        this.uuid = urlParams.get('uuid');
+        this.uuid = getUuidFromUrl(); // Use shared getUuidFromUrl
         this.returnUrl = urlParams.get('return') || 'dashboard';
         
         console.log(`Book params: id=${this.bookId}, uuid=${this.uuid}, return=${this.returnUrl}`);
-    }
-
-    async loadData() {
-        if (!this.uuid) {
-            console.error('No UUID found in URL');
-            return;
-        }
-        try {
-            const dataUrl = `dashboard_data/${this.uuid}.json`;
-            console.log(`Attempting to load data from: ${dataUrl}`)
-            const response = await fetch(dataUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            this.data = await response.json();
-            console.log('Data loaded successfully');
-        } catch (error) {
-            console.error('Error loading data:', error);
-            this.data = null;
-        }
     }
 
     renderBookDetails() {
