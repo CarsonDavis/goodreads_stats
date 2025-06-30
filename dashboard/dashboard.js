@@ -1,47 +1,19 @@
-// Modern Reading Dashboard - Vanilla JS
 class ReadingDashboard {
     constructor() {
         this.data = null;
         this.charts = {};
         this.isDarkMode = localStorage.getItem('darkMode') === 'true';
-        this.env = this.detectEnvironment();
+        this.env = ENV;
         
         console.log('Environment detected:', this.env);
         this.init();
     }
 
-    detectEnvironment() {
-        const host = window.location.host;
-        
-        if (host === 'localhost:8000' || host === '127.0.0.1:8000') {
-            return {
-                mode: 'local-docker',
-                apiBase: 'http://localhost:8001'
-            };
-        } else if (host === 'dev.goodreads-stats.codebycarson.com') {
-            return {
-                mode: 'development',
-                apiBase: 'https://dev.goodreads-stats.codebycarson.com/api'
-            };
-        } else if (host === 'goodreads-stats.codebycarson.com') {
-            return {
-                mode: 'production',
-                apiBase: 'https://goodreads-stats.codebycarson.com/api'
-            };
-        } else {
-            // Fallback for local development without API
-            return {
-                mode: 'local-static',
-                apiBase: null,
-                dataPath: 'dashboard_data/'
-            };
-        }
-    }
-
     async init() {
         this.setupDarkMode();
         this.setupEventListeners();
-        await this.loadData();
+        this.uuid = getUuidFromUrl();
+        this.data = await loadDataForUuid(this.uuid);
         
         if (this.data) {
             this.renderDashboard();

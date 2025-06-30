@@ -4,12 +4,13 @@ class BooksPage {
         this.filterType = null;
         this.filterValue = null;
         this.uuid = null;
+        this.env = ENV;
         this.init();
     }
 
     async init() {
         this.getUrlParams();
-        await this.loadData();
+        this.data = await loadDataForUuid(this.uuid);
         if (this.data && this.filterType && this.filterValue !== null) {
             this.renderPage();
         } else {
@@ -21,29 +22,9 @@ class BooksPage {
         const urlParams = new URLSearchParams(window.location.search);
         this.filterType = urlParams.get('type'); // 'genre', 'rating', 'year'
         this.filterValue = urlParams.get('value');
-        this.uuid = urlParams.get('uuid');
+        this.uuid = getUuidFromUrl();
         
         console.log(`Filter params: type=${this.filterType}, value=${this.filterValue}, uuid=${this.uuid}`);
-    }
-
-    async loadData() {
-        if (!this.uuid) {
-            console.error('No UUID found in URL');
-            return;
-        }
-        try {
-            const dataUrl = `dashboard_data/${this.uuid}.json`;
-            console.log(`Attempting to load data from: ${dataUrl}`)
-            const response = await fetch(dataUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            this.data = await response.json();
-            console.log('Data loaded successfully');
-        } catch (error) {
-            console.error('Error loading data:', error);
-            this.data = null;
-        }
     }
 
     renderPage() {
