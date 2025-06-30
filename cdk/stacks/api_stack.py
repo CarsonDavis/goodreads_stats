@@ -4,6 +4,8 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_iam as iam,
     aws_logs as logs,
+    aws_stepfunctions as sfn,
+    aws_stepfunctions_tasks as tasks,
     Duration,
     CfnOutput,
     BundlingOptions
@@ -46,7 +48,26 @@ class ApiStack(Stack):
             "LOG_LEVEL": "INFO" if deployment_env == "prod" else "DEBUG"
         }
         
-        # Orchestrator Lambda role with invoke permissions
+        # BookProcessor Lambda role
+        book_processor_role = iam.Role(
+            self, "BookProcessorRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        
+        # Aggregator Lambda role
+        aggregator_role = iam.Role(
+            self, "AggregatorRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        storage_stack.data_bucket.grant_read_write(aggregator_role)
+        
+        # Orchestrator Lambda role with Step Functions permissions
         orchestrator_role = iam.Role(
             self, "OrchestratorRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -56,23 +77,115 @@ class ApiStack(Stack):
         )
         storage_stack.data_bucket.grant_read_write(orchestrator_role)
         
-        # Orchestrator Lambda (main processing) - Define first so we can reference it
+        # BookProcessor Lambda - Processes individual books
+        self.book_processor = _lambda.Function(
+            self, "BookProcessor",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="lambda_function.lambda_handler",
+            code=_lambda.Code.from_asset("lambda_code/book_processor"),
+            timeout=Duration.seconds(30),  # 30-second timeout for single book
+            memory_size=256,  # Lower memory for single book processing
+            role=book_processor_role,
+            environment=base_env,
+            layers=[lambda_layer],
+            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+        )
+        
+        # Aggregator Lambda - Combines results and creates final JSON
+        self.aggregator = _lambda.Function(
+            self, "Aggregator",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="lambda_function.lambda_handler",
+            code=_lambda.Code.from_asset("lambda_code/aggregator"),
+            timeout=Duration.minutes(5),  # 5-minute timeout for aggregation
+            memory_size=512,  # Medium memory for aggregation
+            role=aggregator_role,
+            environment={
+                **base_env,
+                "S3_BUCKET_NAME": storage_stack.data_bucket.bucket_name
+            },
+            layers=[lambda_layer],
+            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+        )
+        
+        # Step Function State Machine
+        book_processor_task = tasks.LambdaInvoke(
+            self, "ProcessBookTask",
+            lambda_function=self.book_processor,
+            output_path="$.Payload"
+        )
+        
+        map_state = sfn.Map(
+            self, "ProcessAllBooks",
+            max_concurrency=1000,
+            items_path="$.books",
+            parameters={
+                "book.$": "$"
+            }
+        ).iterator(book_processor_task)
+        
+        aggregator_task = tasks.LambdaInvoke(
+            self, "AggregateResultsTask",
+            lambda_function=self.aggregator,
+            payload=sfn.TaskInput.from_object({
+                "processing_uuid.$": "$.processing_uuid",
+                "original_books.$": "$.original_books",
+                "enriched_results.$": "$.enriched_results"
+            }),
+            output_path="$.Payload"
+        )
+        
+        definition = map_state.add_catch(
+            sfn.Fail(self, "ProcessingFailed", cause="Book processing failed"),
+            errors=[sfn.Errors.ALL]
+        ).next(aggregator_task)
+        
+        # Step Function execution role
+        step_function_role = iam.Role(
+            self, "StepFunctionRole",
+            assumed_by=iam.ServicePrincipal("states.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaRole")
+            ]
+        )
+        
+        self.state_machine = sfn.StateMachine(
+            self, "BookProcessingStateMachine",
+            definition=definition,
+            role=step_function_role,
+            timeout=Duration.minutes(30),  # 30-minute total timeout
+            logs=sfn.LogOptions(
+                destination=logs.LogGroup(
+                    self, "StepFunctionLogs",
+                    retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+                ),
+                level=sfn.LogLevel.ALL
+            )
+        )
+        
+        # Grant Step Function permission to invoke Lambda functions
+        self.book_processor.grant_invoke(step_function_role)
+        self.aggregator.grant_invoke(step_function_role)
+        
+        # Orchestrator Lambda (refactored to start Step Function)
         self.orchestrator = _lambda.Function(
             self, "Orchestrator",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler", 
             code=_lambda.Code.from_asset("lambda_code/orchestrator"),
-            timeout=Duration.minutes(15),  # Max Lambda timeout
-            memory_size=1024,  # Higher memory for processing
+            timeout=Duration.minutes(5),  # Reduced timeout - just starts Step Function
+            memory_size=512,  # Reduced memory - less processing
             role=orchestrator_role,
             environment={
                 **base_env,
-                "MAX_CONCURRENT": "10",  # Concurrent book processing
-                "API_TIMEOUT": "30"
+                "STATE_MACHINE_ARN": self.state_machine.state_machine_arn
             },
             layers=[lambda_layer],
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
+        
+        # Grant orchestrator permission to start Step Function execution
+        self.state_machine.grant_start_execution(orchestrator_role)
 
         # Upload Handler Lambda role  
         upload_role = iam.Role(
@@ -217,4 +330,22 @@ class ApiStack(Stack):
             self, "StatusCheckerArn",
             value=self.status_checker.function_arn,
             description="Status Checker Lambda ARN"
+        )
+        
+        CfnOutput(
+            self, "BookProcessorArn",
+            value=self.book_processor.function_arn,
+            description="Book Processor Lambda ARN"
+        )
+        
+        CfnOutput(
+            self, "AggregatorArn",
+            value=self.aggregator.function_arn,
+            description="Aggregator Lambda ARN"
+        )
+        
+        CfnOutput(
+            self, "StateMachineArn",
+            value=self.state_machine.state_machine_arn,
+            description="Step Functions State Machine ARN"
         )
