@@ -122,14 +122,15 @@ class ApiStack(Stack):
                 allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
                 allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key"],
                 max_age=Duration.hours(1)
-            ),
-            # Enable request validation
-            request_validator=apigateway.RequestValidator(
-                self, "RequestValidator",
-                rest_api=None,  # Will be set automatically
-                validate_request_body=True,
-                validate_request_parameters=True
             )
+        )
+        
+        # Create request validator after API is created
+        request_validator = apigateway.RequestValidator(
+            self, "RequestValidator",
+            rest_api=self.api,
+            validate_request_body=True,
+            validate_request_parameters=True
         )
         
         # API Gateway routes
