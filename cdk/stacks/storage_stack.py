@@ -86,12 +86,17 @@ class StorageStack(Stack):
         
         # Website bucket configuration  
         if deployment_env == "prod":
-            # For production, we'll use CloudFront
+            # For production, we'll use CloudFront with OAI
             self.website_bucket = s3.Bucket(
                 self, "WebsiteBucket",
                 bucket_name="goodreads-stats-website-prod",
-                public_read_access=False,  # CloudFront will access via OAI
-                block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Block all public access for security
+                public_read_access=False,  # No direct public access
+                block_public_access=s3.BlockPublicAccess(
+                    block_public_acls=True,
+                    block_public_policy=False,  # Allow OAI policy
+                    ignore_public_acls=True,
+                    restrict_public_buckets=False  # Allow OAI access
+                ),
                 website_index_document="index.html",
                 website_error_document="404.html",
                 removal_policy=RemovalPolicy.RETAIN
