@@ -18,17 +18,6 @@ class ApiStack(Stack):
         self.storage_stack = storage_stack
         self.deployment_env = deployment_env
         
-        # Lambda execution role with S3 permissions
-        lambda_role = iam.Role(
-            self, "LambdaExecutionRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-            ]
-        )
-        
-        # Grant S3 permissions to Lambda role
-        storage_stack.data_bucket.grant_read_write(lambda_role)
         
         # Shared Lambda layer for common dependencies
         lambda_layer = _lambda.LayerVersion(
@@ -56,6 +45,16 @@ class ApiStack(Stack):
             "LOG_LEVEL": "INFO" if deployment_env == "prod" else "DEBUG"
         }
         
+        # Orchestrator Lambda role with invoke permissions
+        orchestrator_role = iam.Role(
+            self, "OrchestratorRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        storage_stack.data_bucket.grant_read_write(orchestrator_role)
+        
         # Orchestrator Lambda (main processing) - Define first so we can reference it
         self.orchestrator = _lambda.Function(
             self, "Orchestrator",
@@ -64,7 +63,7 @@ class ApiStack(Stack):
             code=_lambda.Code.from_asset("lambda_code/orchestrator"),
             timeout=Duration.minutes(15),  # Max Lambda timeout
             memory_size=1024,  # Higher memory for processing
-            role=lambda_role,
+            role=orchestrator_role,
             environment={
                 **base_env,
                 "MAX_CONCURRENT": "10",  # Concurrent book processing
@@ -74,6 +73,16 @@ class ApiStack(Stack):
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
 
+        # Upload Handler Lambda role  
+        upload_role = iam.Role(
+            self, "UploadRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        storage_stack.data_bucket.grant_read_write(upload_role)
+        
         # Upload Handler Lambda - Add orchestrator function name to environment
         upload_env = {
             **base_env,
@@ -87,11 +96,21 @@ class ApiStack(Stack):
             code=_lambda.Code.from_asset("lambda_code/upload_handler"),
             timeout=Duration.minutes(2),
             memory_size=512,
-            role=lambda_role,
+            role=upload_role,
             environment=upload_env,
             layers=[lambda_layer],
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
+        
+        # Status Checker Lambda role
+        status_role = iam.Role(
+            self, "StatusRole", 
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        storage_stack.data_bucket.grant_read_write(status_role)
         
         # Status Checker Lambda
         self.status_checker = _lambda.Function(
@@ -101,7 +120,7 @@ class ApiStack(Stack):
             code=_lambda.Code.from_asset("lambda_code/status_checker"),
             timeout=Duration.seconds(30),
             memory_size=256,
-            role=lambda_role,
+            role=status_role,
             environment=base_env,
             layers=[lambda_layer],
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
