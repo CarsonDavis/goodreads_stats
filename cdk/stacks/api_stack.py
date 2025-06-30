@@ -191,15 +191,6 @@ class ApiStack(Stack):
         # Grant upload handler permission to invoke orchestrator
         self.orchestrator.grant_invoke(self.upload_handler)
         
-        # Grant upload handler permission to invoke other Lambda functions
-        lambda_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["lambda:InvokeFunction"],
-                resources=[self.orchestrator.function_arn]
-            )
-        )
-        
         # Outputs
         CfnOutput(
             self, "ApiUrl",
