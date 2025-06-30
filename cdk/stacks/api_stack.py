@@ -143,8 +143,8 @@ class ApiStack(Stack):
             integration_responses=[
                 apigateway.IntegrationResponse(
                     status_code="200",
-                    response_headers={
-                        "Access-Control-Allow-Origin": "'*'"
+                    response_parameters={
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
                     }
                 ),
                 apigateway.IntegrationResponse(
@@ -165,8 +165,8 @@ class ApiStack(Stack):
             method_responses=[
                 apigateway.MethodResponse(
                     status_code="200",
-                    response_headers={
-                        "Access-Control-Allow-Origin": True
+                    response_parameters={
+                        "method.response.header.Access-Control-Allow-Origin": True
                     }
                 )
             ]
