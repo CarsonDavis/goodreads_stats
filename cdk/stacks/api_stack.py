@@ -133,6 +133,7 @@ class ApiStack(Stack):
             self, "GoodreadsStatsApi",
             rest_api_name=f"Goodreads Stats API ({deployment_env})",
             description=f"API for Goodreads Stats processing - {deployment_env}",
+            binary_media_types=["multipart/form-data", "*/*"],  # Enable binary media support
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=[
                     f"https://{domain_name}",
@@ -158,37 +159,13 @@ class ApiStack(Stack):
         api_resource = self.api.root.add_resource("api")
         upload_integration = apigateway.LambdaIntegration(
             self.upload_handler,
-            proxy=False,
-            integration_responses=[
-                apigateway.IntegrationResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": "'*'"
-                    }
-                ),
-                apigateway.IntegrationResponse(
-                    status_code="400",
-                    selection_pattern=".*\\[BadRequest\\].*"
-                ),
-                apigateway.IntegrationResponse(
-                    status_code="500", 
-                    selection_pattern=".*\\[InternalServerError\\].*"
-                )
-            ]
+            proxy=True  # Enable proxy integration for binary data handling
         )
         
         upload_resource = api_resource.add_resource("upload")
         upload_resource.add_method(
             "POST",
-            upload_integration,
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": True
-                    }
-                )
-            ]
+            upload_integration
         )
         
         # GET /api/status/{uuid}
