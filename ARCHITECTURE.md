@@ -150,10 +150,10 @@ dashboard/
 
 ### URL Structure
 ```
-/                                    → Homepage (CSV upload)
-/dashboard/?uuid={id}                → Main dashboard
-/dashboard/books.html?uuid={id}&type={filter}&value={value}  → Filtered books
-/dashboard/detail.html?uuid={id}&id={book_id}&return={url}   → Book details
+/                                    → Homepage (CSV upload) 
+/dashboard?uuid={id}                 → Main analytics dashboard
+/books?uuid={id}&type={filter}&value={value}  → Filtered book listings
+/detail?uuid={id}&id={book_id}&return={url}   → Individual book details
 ```
 
 ### Frontend Components
@@ -167,7 +167,7 @@ dashboard/
   - Instructions for full processing
   - Link to sample dashboard
 
-#### 2. Dashboard (`/dashboard/index.html`)
+#### 2. Dashboard (`/dashboard.html`)
 - **Class**: `ReadingDashboard` (dashboard.js)
 - **Data Loading**: UUID-based JSON fetching
 - **Visualizations**: Chart.js for interactive charts
@@ -180,7 +180,7 @@ dashboard/
   - Recent books table
   - Dark mode toggle
 
-#### 3. Books Listing (`/dashboard/books.html`)
+#### 3. Books Listing (`/books.html`)
 - **Class**: `BooksPage` (books.js)
 - **Filtering**: Genre, rating, year, pages-per-year
 - **Features**:
@@ -189,7 +189,7 @@ dashboard/
   - Click-through to detail pages
   - Breadcrumb navigation
 
-#### 4. Book Details (`/dashboard/detail.html`)
+#### 4. Book Details (`/detail.html`)
 - **Class**: `BookDetailPage` (detail.js)
 - **Features**:
   - Full book information display
@@ -201,12 +201,8 @@ dashboard/
 
 #### Local Development
 ```javascript
-// Tries multiple paths for UUID JSON files
-const possiblePaths = [
-    `../dashboard_data/${uuid}.json`,
-    `./dashboard_data/${uuid}.json`, 
-    `dashboard_data/${uuid}.json`
-];
+// Direct path to UUID JSON files from dashboard folder
+const dataUrl = `dashboard_data/${uuid}.json`;
 ```
 
 #### Production Deployment
@@ -299,7 +295,7 @@ class BookAnalytics:
 2. Place CSV in `data/` folder
 3. Run `python run_smart_pipeline.py`
 4. Serve dashboard with `python -m http.server`
-5. Access via `http://localhost:8000/dashboard/?uuid={generated-uuid}`
+5. Access via `http://localhost:8000/dashboard?uuid={generated-uuid}`
 
 ### Production Deployment
 

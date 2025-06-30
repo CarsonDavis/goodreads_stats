@@ -33,7 +33,7 @@ class ReadingDashboard {
             return {
                 mode: 'local-static',
                 apiBase: null,
-                dataPath: '../dashboard_data/'
+                dataPath: 'dashboard_data/'
             };
         }
     }
@@ -291,7 +291,7 @@ class ReadingDashboard {
                         const index = chartElement.index;
                         const rating = chartData[index][0];
                         const uuid = this.getUuidFromUrl();
-                        window.location.href = `books.html?uuid=${uuid}&type=rating&value=${rating}`;
+                        window.location.href = `books?uuid=${uuid}&type=rating&value=${rating}`;
                     }
                 },
                 plugins: {
@@ -329,7 +329,7 @@ class ReadingDashboard {
                         const index = chartElement.index;
                         const genre = top10[index].genre;
                         const uuid = this.getUuidFromUrl();
-                        window.location.href = `books.html?uuid=${uuid}&type=genre&value=${encodeURIComponent(genre)}`;
+                        window.location.href = `books?uuid=${uuid}&type=genre&value=${encodeURIComponent(genre)}`;
                     }
                 },
                 scales: {
@@ -387,7 +387,7 @@ class ReadingDashboard {
                         const index = chartElement.index;
                         const year = years[index];
                         const uuid = this.getUuidFromUrl();
-                        window.location.href = `books.html?uuid=${uuid}&type=pages-year&value=${year}`;
+                        window.location.href = `books?uuid=${uuid}&type=pages-year&value=${year}`;
                     }
                 }
             }
@@ -576,5 +576,17 @@ class ReadingDashboard {
 
 // Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new ReadingDashboard();
+    const dashboard = new ReadingDashboard();
+    
+    // Handle View All Books button
+    const viewAllBooksBtn = document.getElementById('viewAllBooksBtn');
+    if (viewAllBooksBtn) {
+        viewAllBooksBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const uuid = dashboard.getUuidFromUrl();
+            if (uuid) {
+                window.location.href = `books?uuid=${uuid}&type=all&value=all`;
+            }
+        });
+    }
 });

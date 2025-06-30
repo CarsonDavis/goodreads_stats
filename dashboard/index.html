@@ -4,219 +4,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📚 Reading Dashboard</title>
-
-    <!-- Tailwind CSS for modern styling -->
+    <title>📚 Goodreads Stats - Analyze Your Reading Journey</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Chart.js for visualizations -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Custom styles -->
     <style>
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
-        .card {
-            backdrop-filter: blur(16px) saturate(180%);
-            background-color: rgba(255, 255, 255, 0.75);
-            border: 1px solid rgba(209, 213, 219, 0.3);
+        .upload-area {
+            transition: all 0.3s ease;
         }
 
-        .dark .card {
-            background-color: rgba(17, 24, 39, 0.75);
-            border: 1px solid rgba(75, 85, 99, 0.3);
+        .upload-area.dragover {
+            border-color: #4F46E5;
+            background-color: rgba(79, 70, 229, 0.1);
         }
     </style>
 </head>
 
-<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-    <!-- Header -->
-    <header class="gradient-bg text-white py-8 mb-8">
-        <div class="container mx-auto px-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-4xl font-bold mb-2">📚 Reading Dashboard</h1>
-                    <p class="text-lg opacity-90" id="subtitle">Loading your reading journey...</p>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="../"
-                        class="p-2 px-4 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all text-white font-medium">
-                        ← Upload New File
-                    </a>
-                    <button id="deleteDataButton"
-                        class="p-2 px-4 rounded-lg bg-red-500 bg-opacity-80 hover:bg-opacity-100 transition-all text-white font-medium">
-                        🗑️ Delete My Data
-                    </button>
-                    <button id="darkModeToggle"
-                        class="p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all">
-                        🌙
-                    </button>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Loading State -->
-    <div id="loading" class="container mx-auto px-6 text-center py-20">
-        <div class="animate-pulse">
-            <div class="text-6xl mb-4">📖</div>
-            <div class="text-xl text-gray-600 dark:text-gray-300">Loading your reading data...</div>
-        </div>
-    </div>
-
-    <!-- Dashboard Content -->
-    <div id="dashboard" class="container mx-auto px-6 pb-12 hidden">
-
-        <!-- Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="card rounded-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Total Books Read</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="totalBooks">-</p>
-                    </div>
-                    <div class="text-3xl">📚</div>
-                </div>
-            </div>
-
-            <div class="card rounded-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pages</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="totalPages">-</p>
-                    </div>
-                    <div class="text-3xl">📄</div>
-                </div>
-            </div>
-
-            <div class="card rounded-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Average Rating</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="avgRating">-</p>
-                    </div>
-                    <div class="text-3xl">⭐</div>
-                </div>
-            </div>
-
-            <div class="card rounded-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Reading Years</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="readingYears">-</p>
-                    </div>
-                    <div class="text-3xl">📅</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts Row 1 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-
-            <!-- Books by Year Chart -->
-            <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">📊 Books Read by Year</h3>
-                <div class="relative h-80">
-                    <canvas id="booksByYearChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Rating Distribution -->
-            <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">⭐ Rating Distribution</h3>
-                <div class="relative h-80">
-                    <canvas id="ratingChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts Row 2 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-
-            <!-- Top Genres -->
-            <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">🏷️ Top Genres</h3>
-                <div class="relative h-80">
-                    <canvas id="genresChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Pages Timeline -->
-            <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">📖 Pages Read by Year</h3>
-                <div class="relative h-80">
-                    <canvas id="pagesChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Books Table -->
-        <div class="card rounded-xl p-6">
-            <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">📚 Recent Books</h3>
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead>
-                        <tr class="border-b border-gray-200 dark:border-gray-700">
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Title</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Author</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Date</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Rating</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Pages</th>
-                        </tr>
-                    </thead>
-                    <tbody id="recentBooksTable">
-                        <!-- Books will be inserted here -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Error State -->
-    <div id="error" class="container mx-auto px-6 text-center py-20 hidden">
-        <div class="text-6xl mb-4">📋</div>
-        <div class="text-xl text-gray-600 dark:text-gray-300 mb-4">Dashboard data not found</div>
-        <div class="text-gray-500 dark:text-gray-400 mb-6">
-            <div class="mb-2">Make sure you include a UUID in the URL:</div>
-            <div class="font-mono bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
-                <div>✅ /dashboard/?uuid=759f8950-6946-4101-9c16-2aafc54d672d</div>
-                <div>✅ /dashboard/#759f8950-6946-4101-9c16-2aafc54d672d</div>
-            </div>
-            <div class="mt-4 text-xs">
-                Generate data with: <span class="font-mono">python create_dashboard_json.py</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div class="p-6">
-                <div class="flex items-center mb-4">
-                    <div class="text-red-500 text-3xl mr-3">⚠️</div>
-                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Delete Your Data?</h3>
-                </div>
-                <p class="text-gray-600 dark:text-gray-300 mb-6">
-                    This will permanently delete all your processed reading data. This action cannot be undone.
+<body class="bg-gray-50 min-h-screen">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="gradient-bg text-white py-16">
+            <div class="container mx-auto px-6 text-center">
+                <h1 class="text-5xl font-bold mb-4">📚 Goodreads Stats</h1>
+                <p class="text-xl opacity-90 max-w-2xl mx-auto">
+                    Transform your Goodreads reading history into beautiful, interactive visualizations and insights
                 </p>
-                <div class="flex space-x-3">
-                    <button id="cancelDelete"
-                        class="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors">
-                        Cancel
-                    </button>
-                    <button id="confirmDelete"
-                        class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                        Delete Forever
-                    </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 container mx-auto px-6 py-12">
+            <div class="max-w-4xl mx-auto">
+
+                <!-- Project Description -->
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-semibold text-gray-800 mb-6">Analyze Your Reading Journey</h2>
+                    <div class="grid md:grid-cols-3 gap-8 mb-8">
+                        <div class="text-center">
+                            <div class="text-4xl mb-4">📊</div>
+                            <h3 class="font-semibold text-lg mb-2">Rich Analytics</h3>
+                            <p class="text-gray-600">View reading trends, genre preferences, and rating patterns over
+                                time</p>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-4xl mb-4">📖</div>
+                            <h3 class="font-semibold text-lg mb-2">Book Details</h3>
+                            <p class="text-gray-600">Explore individual books with covers, descriptions, and your
+                                personal notes</p>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-4xl mb-4">🎯</div>
+                            <h3 class="font-semibold text-lg mb-2">Smart Filtering</h3>
+                            <p class="text-gray-600">Filter by genre, rating, year, or any combination to find specific
+                                books</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Section -->
+                <div class="bg-white rounded-xl shadow-lg p-8 mb-8">
+                    <h3 class="text-2xl font-semibold text-gray-800 mb-6 text-center">Get Started</h3>
+
+                    <!-- Instructions -->
+                    <div class="mb-6 text-center">
+                        <p class="text-gray-600 mb-4">
+                            Upload your Goodreads library export to generate your personalized dashboard
+                        </p>
+                        <a href="https://www.goodreads.com/review/import" target="_blank"
+                            class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium">
+                            📄 Export your Goodreads library →
+                        </a>
+                    </div>
+
+                    <!-- Upload Area -->
+                    <div id="upload-area"
+                        class="upload-area border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-gray-400 transition-colors">
+                        <div id="upload-content">
+                            <div class="text-5xl mb-4">📁</div>
+                            <p class="text-xl font-medium text-gray-700 mb-2">Drop your CSV file here</p>
+                            <p class="text-gray-500 mb-4">or click to browse</p>
+                            <button
+                                class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                Choose File
+                            </button>
+                        </div>
+
+                        <!-- Processing State -->
+                        <div id="processing-content" class="hidden">
+                            <div class="text-5xl mb-4">⚙️</div>
+                            <p class="text-xl font-medium text-gray-700 mb-2">Processing your library...</p>
+                            <div class="w-64 bg-gray-200 rounded-full h-3 mx-auto">
+                                <div id="progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                                    style="width: 0%"></div>
+                            </div>
+                            <p id="progress-text" class="text-gray-500 mt-2">Starting analysis...</p>
+                        </div>
+                    </div>
+
+                    <input type="file" id="file-input" accept=".csv" class="hidden">
+
+                    <!-- Error Display -->
+                    <div id="error-display" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p class="text-red-700" id="error-message"></p>
+                    </div>
+                </div>
+
+                <!-- Sample Dashboard Link -->
+                <div class="text-center">
+                    <p class="text-gray-600 mb-4">Want to see it in action first?</p>
+                    <a href="dashboard?uuid=759f8950-6946-4101-9c16-2aafc54d672d"
+                        class="inline-flex items-center bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors">
+                        👀 View Sample Dashboard
+                    </a>
                 </div>
             </div>
-        </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-gray-800 text-white py-8">
+            <div class="container mx-auto px-6 text-center">
+                <p class="opacity-75">
+                    Built with ❤️ for book lovers • Your data stays private and is processed locally
+                </p>
+            </div>
+        </footer>
     </div>
 
-    <!-- Dashboard JavaScript -->
-    <script src="dashboard.js"></script>
+    <script src="upload.js"></script>
 </body>
 
 </html>

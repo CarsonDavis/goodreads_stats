@@ -92,7 +92,7 @@ class FrontendStack(Stack):
             certificate=certificate,
             default_root_object="index.html",
             error_responses=[
-                # Handle SPA routing
+                # Redirect missing pages to home page
                 cloudfront.ErrorResponse(
                     http_status=404,
                     response_http_status=200,

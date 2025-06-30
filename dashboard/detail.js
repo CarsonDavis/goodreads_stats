@@ -21,7 +21,7 @@ class BookDetailPage {
         const urlParams = new URLSearchParams(window.location.search);
         this.bookId = urlParams.get('id'); // goodreads_id
         this.uuid = urlParams.get('uuid');
-        this.returnUrl = urlParams.get('return') || 'index.html';
+        this.returnUrl = urlParams.get('return') || 'dashboard';
         
         console.log(`Book params: id=${this.bookId}, uuid=${this.uuid}, return=${this.returnUrl}`);
     }
@@ -32,7 +32,7 @@ class BookDetailPage {
             return;
         }
         try {
-            const dataUrl = `../dashboard_data/${this.uuid}.json`;
+            const dataUrl = `dashboard_data/${this.uuid}.json`;
             console.log(`Attempting to load data from: ${dataUrl}`)
             const response = await fetch(dataUrl);
             if (!response.ok) {

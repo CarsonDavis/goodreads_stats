@@ -63,8 +63,10 @@ However, this bypasses the coordinated frontend/upload system.
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                │
 │  Frontend (S3 + CloudFront)                                   │
-│  ├── goodreads-stats.codebycarson.com                         │
-│  ├── Static HTML/CSS/JS files                                 │
+│  ├── goodreads-stats.codebycarson.com/                        │
+│  ├── goodreads-stats.codebycarson.com/dashboard?uuid=...      │
+│  ├── goodreads-stats.codebycarson.com/books?uuid=...          │
+│  ├── goodreads-stats.codebycarson.com/detail?uuid=...         │
 │  └── Environment detection → API calls                        │
 │                           ↓                                    │
 │  API Layer (API Gateway)                                      │

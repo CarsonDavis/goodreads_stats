@@ -32,7 +32,7 @@ class BooksPage {
             return;
         }
         try {
-            const dataUrl = `../dashboard_data/${this.uuid}.json`;
+            const dataUrl = `dashboard_data/${this.uuid}.json`;
             console.log(`Attempting to load data from: ${dataUrl}`)
             const response = await fetch(dataUrl);
             if (!response.ok) {
@@ -95,6 +95,10 @@ class BooksPage {
                 title = `Pages Read in ${this.filterValue}`;
                 subtitle = `All books contributing to pages read in ${this.filterValue}`;
                 break;
+            case 'all':
+                title = 'All Books';
+                subtitle = `Your complete reading library`;
+                break;
             default:
                 title = 'Filtered Books';
                 subtitle = `Filter: ${this.filterType} = ${this.filterValue}`;
@@ -107,7 +111,7 @@ class BooksPage {
     updateBackButton() {
         const backButton = document.getElementById('back-to-dashboard');
         if (this.uuid) {
-            backButton.href = `index.html?uuid=${this.uuid}`;
+            backButton.href = `dashboard?uuid=${this.uuid}`;
         }
     }
 
@@ -124,6 +128,8 @@ class BooksPage {
             case 'pages-year':
                 const targetYear = parseInt(this.filterValue);
                 return this.data.books.filter(book => book.reading_year === targetYear);
+            case 'all':
+                return this.data.books;
             default:
                 console.error(`Unknown filter type: ${this.filterType}`);
                 return [];
@@ -137,7 +143,7 @@ class BooksPage {
         // Make card clickable
         card.addEventListener('click', () => {
             const returnUrl = encodeURIComponent(`books?type=${this.filterType}&value=${encodeURIComponent(this.filterValue)}`);
-            window.location.href = `detail.html?id=${book.goodreads_id}&uuid=${this.uuid}&return=${returnUrl}`;
+            window.location.href = `detail?id=${book.goodreads_id}&uuid=${this.uuid}&return=${returnUrl}`;
         });
         
         const ratingDisplay = book.my_rating ? '⭐'.repeat(book.my_rating) : 'Not Rated';

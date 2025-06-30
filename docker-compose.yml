@@ -29,11 +29,8 @@ services:
     ports:
       - "8000:80"
     volumes:
-      # Mount the dashboard directory
+      # Mount the dashboard directory as the web root
       - ./dashboard:/usr/share/nginx/html/dashboard
-      # Mount the root files
-      - ./index.html:/usr/share/nginx/html/index.html
-      - ./upload.js:/usr/share/nginx/html/upload.js
       # Mount dashboard_data for local file access
       - ./dashboard_data:/usr/share/nginx/html/dashboard_data
       # Custom nginx config for URL routing

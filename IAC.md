@@ -141,7 +141,7 @@ class StorageStack(Stack):
             website_index_document="index.html",
             cors=[
                 s3.CorsRule(
-                    allowed_origins=["https://codebycarson.com"],
+                    allowed_origins=["https://goodreads-stats.codebycarson.com"],
                     allowed_methods=[s3.HttpMethods.GET],
                     allowed_headers=["*"]
                 )
@@ -152,7 +152,7 @@ class StorageStack(Stack):
         # S3 Bucket for website hosting
         self.website_bucket = s3.Bucket(
             self, "WebsiteBucket",
-            bucket_name="codebycarson.com",
+            bucket_name="goodreads-stats-website-prod",
             public_read_access=True,
             website_index_document="index.html",
             website_error_document="404.html",
@@ -245,7 +245,7 @@ class ApiStack(Stack):
             rest_api_name="Goodreads Stats API",
             description="API for Goodreads Stats processing",
             default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=["https://codebycarson.com"],
+                allow_origins=["https://goodreads-stats.codebycarson.com"],
                 allow_methods=["GET", "POST", "DELETE"],
                 allow_headers=["Content-Type", "Authorization"]
             )
@@ -291,14 +291,14 @@ class FrontendStack(Stack):
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED
             ),
-            domain_names=["codebycarson.com"],
+            domain_names=["goodreads-stats.codebycarson.com"],
             certificate=None,  # Use default CloudFront certificate
             default_root_object="index.html",
             error_responses=[
                 cloudfront.ErrorResponse(
                     http_status=404,
                     response_http_status=200,
-                    response_page_path="/index.html"  # SPA routing
+                    response_page_path="/index.html"  # Fallback to upload page
                 )
             ]
         )
@@ -402,14 +402,14 @@ jobs:
           
       - name: Deploy to S3
         run: |
-          aws s3 sync dashboard/ s3://goodreads-stats.codebycarson.com/ \
+          aws s3 sync dashboard/ s3://goodreads-stats-website-prod/ \
             --delete \
             --cache-control "max-age=31536000" \
             --exclude "*.html" \
             --exclude "*.js"
             
           # HTML and JS files with shorter cache
-          aws s3 sync dashboard/ s3://goodreads-stats.codebycarson.com/ \
+          aws s3 sync dashboard/ s3://goodreads-stats-website-prod/ \
             --cache-control "max-age=300" \
             --include "*.html" \
             --include "*.js"
@@ -544,7 +544,7 @@ cdk destroy --all
 aws logs tail /aws/lambda/GoodreadsStats-UploadHandler --follow
 
 # Check API status
-curl https://api.codebycarson.com/goodreads-stats/health
+curl https://goodreads-stats.codebycarson.com/api/health
 ```
 
 ---
@@ -594,7 +594,7 @@ curl https://api.codebycarson.com/goodreads-stats/health
 ```python
 # API Gateway CORS
 cors_options=apigateway.CorsOptions(
-    allow_origins=["https://codebycarson.com"],
+    allow_origins=["https://goodreads-stats.codebycarson.com"],
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Amz-Date", "Authorization"],
     max_age=Duration.hours(1)
@@ -603,7 +603,7 @@ cors_options=apigateway.CorsOptions(
 # S3 CORS
 cors_rules=[
     s3.CorsRule(
-        allowed_origins=["https://codebycarson.com"],
+        allowed_origins=["https://goodreads-stats.codebycarson.com"],
         allowed_methods=[s3.HttpMethods.GET],
         allowed_headers=["*"],
         max_age=3600

@@ -125,7 +125,7 @@ class CSVUploader {
         // Redirect to dashboard
         this.updateProgress(100, 'Complete!');
         setTimeout(() => {
-            window.location.href = `dashboard/?uuid=${uuid}`;
+            window.location.href = `dashboard?uuid=${uuid}`;
         }, 1000);
     }
 
