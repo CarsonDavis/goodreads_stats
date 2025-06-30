@@ -138,13 +138,7 @@ def process_csv_pipeline(processing_uuid: str, bucket: str, csv_key: str):
         # Prepare Step Function input
         step_function_input = {
             "processing_uuid": processing_uuid,
-            "books": [{"book": {
-                "title": book_info.title,
-                "author": book_info.author,
-                "isbn13": book_info.isbn13,
-                "isbn": book_info.isbn,
-                "goodreads_id": book_info.goodreads_id
-            }} for book_info in book_infos],
+            "books": [{"book": book_info.__dict__} for book_info in book_infos],
             "original_books": [book.to_dashboard_dict() for book in books]
         }
         

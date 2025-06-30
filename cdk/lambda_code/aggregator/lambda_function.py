@@ -129,11 +129,11 @@ def lambda_handler(event, context):
         original_books = event.get('original_books', [])
         
         # Handle Step Functions Map state output format
+        # Step Functions Map state returns results as an array of task outputs
         enriched_results = event.get('enriched_results', [])
-        if isinstance(enriched_results, list) and len(enriched_results) > 0:
-            # If results are nested (from Step Functions), flatten them
-            if isinstance(enriched_results[0], list):
-                enriched_results = [item for sublist in enriched_results for item in sublist]
+        
+        # Map state output is already an array of individual Lambda results
+        # No flattening needed - each item is a Lambda response
         
         if not processing_uuid:
             raise ValueError("No processing_uuid provided")

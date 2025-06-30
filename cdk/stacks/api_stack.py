@@ -130,7 +130,7 @@ class ApiStack(Stack):
             payload=sfn.TaskInput.from_object({
                 "processing_uuid.$": "$.processing_uuid",
                 "original_books.$": "$.original_books",
-                "enriched_results.$": "$.enriched_results"
+                "enriched_results.$": "$"  # Map state output goes here
             }),
             output_path="$.Payload"
         )
