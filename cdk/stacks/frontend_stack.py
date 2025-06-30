@@ -45,9 +45,9 @@ class FrontendStack(Stack):
         # CloudFront distribution
         # Configure origin based on environment
         if deployment_env == "prod" and oai:
-            website_origin = origins.S3BucketOrigin.with_origin_access_identity(
-                storage_stack.website_bucket,
-                oai
+            website_origin = origins.S3BucketOrigin(
+                bucket=storage_stack.website_bucket,
+                origin_access_identity=oai
             )
         else:
             # For dev, use S3 static website hosting
