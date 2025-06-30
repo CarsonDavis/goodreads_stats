@@ -4,15 +4,12 @@ class ReadingDashboard {
         this.charts = {};
         this.isDarkMode = localStorage.getItem('darkMode') === 'true';
         this.env = ENV;
-        
-        console.log('Environment detected:', this.env);
-        this.init();
+        this.uuid = getUuidFromUrl();
     }
 
     async init() {
         this.setupDarkMode();
         this.setupEventListeners();
-        this.uuid = getUuidFromUrl();
         this.data = await loadDataForUuid(this.uuid);
         
         if (this.data) {
