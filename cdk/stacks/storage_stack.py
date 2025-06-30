@@ -2,6 +2,7 @@ from aws_cdk import (
     Stack,
     aws_s3 as s3,
     aws_iam as iam,
+    aws_cloudfront as cloudfront,
     RemovalPolicy,
     Duration,
     CfnOutput
@@ -83,8 +84,7 @@ class StorageStack(Stack):
             )
         )
         
-        # CloudFront Origin Access Identity for website hosting
-        self.oai = None
+        # Website bucket configuration  
         if deployment_env == "prod":
             # For production, we'll use CloudFront
             self.website_bucket = s3.Bucket(
@@ -112,6 +112,16 @@ class StorageStack(Stack):
                 website_error_document="404.html",
                 removal_policy=RemovalPolicy.DESTROY
             )
+        
+        # CloudFront Origin Access Identity for production
+        self.oai = None
+        if deployment_env == "prod":
+            self.oai = cloudfront.OriginAccessIdentity(
+                self, "OAI",
+                comment=f"OAI for Goodreads Stats {deployment_env}"
+            )
+            # Grant CloudFront access to website bucket
+            self.website_bucket.grant_read(self.oai)
         
         # Outputs for other stacks
         CfnOutput(

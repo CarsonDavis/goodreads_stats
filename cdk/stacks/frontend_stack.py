@@ -39,23 +39,24 @@ class FrontendStack(Stack):
             validation=acm.CertificateValidation.from_dns(hosted_zone)
         )
         
-        # CloudFront Origin Access Identity for S3
-        oai = cloudfront.OriginAccessIdentity(
-            self, "OAI",
-            comment=f"OAI for Goodreads Stats {deployment_env}"
-        )
-        
-        # Grant CloudFront access to website bucket
-        storage_stack.website_bucket.grant_read(oai)
+        # Use OAI from storage stack (for production) or None (for dev)
+        oai = storage_stack.oai
         
         # CloudFront distribution
+        # Configure origin based on environment
+        if deployment_env == "prod" and oai:
+            website_origin = origins.S3Origin(
+                storage_stack.website_bucket,
+                origin_access_identity=oai
+            )
+        else:
+            # For dev, use S3 website endpoint
+            website_origin = origins.S3Origin(storage_stack.website_bucket)
+        
         self.distribution = cloudfront.Distribution(
             self, "Distribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(
-                    storage_stack.website_bucket,
-                    origin_access_identity=oai
-                ),
+                origin=website_origin,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 compress=True,
@@ -74,19 +75,13 @@ class FrontendStack(Stack):
                 ),
                 # Static assets with longer cache
                 "*.css": cloudfront.BehaviorOptions(
-                    origin=origins.S3Origin(
-                        storage_stack.website_bucket,
-                        origin_access_identity=oai
-                    ),
+                    origin=website_origin,
                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                     cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                     compress=True
                 ),
                 "*.js": cloudfront.BehaviorOptions(
-                    origin=origins.S3Origin(
-                        storage_stack.website_bucket,
-                        origin_access_identity=oai
-                    ),
+                    origin=website_origin,
                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                     cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                     compress=True
