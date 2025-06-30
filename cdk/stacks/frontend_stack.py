@@ -48,8 +48,7 @@ class FrontendStack(Stack):
             # Use S3 with OAI for production - force regular S3 endpoint, not website endpoint
             website_origin = origins.S3Origin(
                 storage_stack.website_bucket,
-                origin_access_identity=oai,
-                s3_bucket_source=storage_stack.website_bucket
+                origin_access_identity=oai
             )
         else:
             # For dev, use S3 static website hosting  
