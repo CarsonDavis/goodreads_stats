@@ -24,14 +24,14 @@ stack_prefix = f"GoodreadsStats-{environment.title()}"
 # Deploy stacks in dependency order
 storage_stack = StorageStack(
     app, f"{stack_prefix}-Storage", 
-    environment=environment,
+    deployment_env=environment,
     env=env
 )
 
 api_stack = ApiStack(
     app, f"{stack_prefix}-Api",
     storage_stack=storage_stack,
-    environment=environment,
+    deployment_env=environment,
     env=env
 )
 
@@ -39,7 +39,7 @@ frontend_stack = FrontendStack(
     app, f"{stack_prefix}-Frontend",
     api_stack=api_stack,
     storage_stack=storage_stack,
-    environment=environment,
+    deployment_env=environment,
     env=env
 )
 

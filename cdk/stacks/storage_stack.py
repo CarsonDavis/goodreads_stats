@@ -9,14 +9,14 @@ from aws_cdk import (
 from constructs import Construct
 
 class StorageStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, environment: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, deployment_env: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
-        self.environment = environment
+        self.deployment_env = deployment_env
         
         # S3 Bucket for the goodreads-stats data
         # Using single bucket with prefixes as specified
-        bucket_name = "goodreads-stats" if environment == "prod" else f"goodreads-stats-{environment}"
+        bucket_name = "goodreads-stats" if deployment_env == "prod" else f"goodreads-stats-{deployment_env}"
         
         self.data_bucket = s3.Bucket(
             self, "DataBucket",
@@ -55,7 +55,7 @@ class StorageStack(Stack):
                     ]
                 )
             ],
-            removal_policy=RemovalPolicy.RETAIN if environment == "prod" else RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.RETAIN if deployment_env == "prod" else RemovalPolicy.DESTROY
         )
         
         # Bucket policy to allow Lambda functions to access specific prefixes
@@ -79,7 +79,7 @@ class StorageStack(Stack):
         
         # CloudFront Origin Access Identity for website hosting
         self.oai = None
-        if environment == "prod":
+        if deployment_env == "prod":
             # For production, we'll use CloudFront
             self.website_bucket = s3.Bucket(
                 self, "WebsiteBucket",
@@ -93,7 +93,7 @@ class StorageStack(Stack):
             # For dev, simpler setup
             self.website_bucket = s3.Bucket(
                 self, "WebsiteBucket", 
-                bucket_name=f"goodreads-stats-website-{environment}",
+                bucket_name=f"goodreads-stats-website-{deployment_env}",
                 public_read_access=True,
                 website_index_document="index.html",
                 website_error_document="404.html",

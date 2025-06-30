@@ -11,11 +11,11 @@ from constructs import Construct
 import os
 
 class ApiStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, storage_stack, environment: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, storage_stack, deployment_env: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
         self.storage_stack = storage_stack
-        self.environment = environment
+        self.deployment_env = deployment_env
         
         # Lambda execution role with S3 permissions
         lambda_role = iam.Role(
@@ -50,9 +50,9 @@ class ApiStack(Stack):
         # Environment variables for all Lambda functions
         base_env = {
             "DATA_BUCKET": storage_stack.data_bucket.bucket_name,
-            "ENVIRONMENT": environment,
+            "ENVIRONMENT": deployment_env,
             "PYTHONPATH": "/opt:/var/runtime",
-            "LOG_LEVEL": "INFO" if environment == "prod" else "DEBUG"
+            "LOG_LEVEL": "INFO" if deployment_env == "prod" else "DEBUG"
         }
         
         # Orchestrator Lambda (main processing) - Define first so we can reference it
@@ -70,7 +70,7 @@ class ApiStack(Stack):
                 "API_TIMEOUT": "30"
             },
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if environment != "prod" else logs.RetentionDays.ONE_MONTH
+            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
 
         # Upload Handler Lambda - Add orchestrator function name to environment
@@ -89,7 +89,7 @@ class ApiStack(Stack):
             role=lambda_role,
             environment=upload_env,
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if environment != "prod" else logs.RetentionDays.ONE_MONTH
+            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
         # Status Checker Lambda
@@ -103,16 +103,16 @@ class ApiStack(Stack):
             role=lambda_role,
             environment=base_env,
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if environment != "prod" else logs.RetentionDays.ONE_MONTH
+            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
         # API Gateway
-        domain_name = f"goodreads-stats.codebycarson.com" if environment == "prod" else f"dev.goodreads-stats.codebycarson.com"
+        domain_name = f"goodreads-stats.codebycarson.com" if deployment_env == "prod" else f"dev.goodreads-stats.codebycarson.com"
         
         self.api = apigateway.RestApi(
             self, "GoodreadsStatsApi",
-            rest_api_name=f"Goodreads Stats API ({environment})",
-            description=f"API for Goodreads Stats processing - {environment}",
+            rest_api_name=f"Goodreads Stats API ({deployment_env})",
+            description=f"API for Goodreads Stats processing - {deployment_env}",
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=[
                     f"https://{domain_name}",

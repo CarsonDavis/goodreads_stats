@@ -11,15 +11,15 @@ from aws_cdk import (
 from constructs import Construct
 
 class FrontendStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, api_stack, storage_stack, environment: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, api_stack, storage_stack, deployment_env: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
         self.api_stack = api_stack
         self.storage_stack = storage_stack
-        self.environment = environment
+        self.deployment_env = deployment_env
         
         # Domain configuration
-        if environment == "prod":
+        if deployment_env == "prod":
             domain_name = "goodreads-stats.codebycarson.com"
             hosted_zone_name = "codebycarson.com"
         else:
@@ -42,7 +42,7 @@ class FrontendStack(Stack):
         # CloudFront Origin Access Identity for S3
         oai = cloudfront.OriginAccessIdentity(
             self, "OAI",
-            comment=f"OAI for Goodreads Stats {environment}"
+            comment=f"OAI for Goodreads Stats {deployment_env}"
         )
         
         # Grant CloudFront access to website bucket
@@ -110,7 +110,7 @@ class FrontendStack(Stack):
                     ttl=Duration.minutes(5)
                 )
             ],
-            comment=f"Goodreads Stats distribution - {environment}",
+            comment=f"Goodreads Stats distribution - {deployment_env}",
             price_class=cloudfront.PriceClass.PRICE_CLASS_100  # US, Canada, Europe
         )
         
