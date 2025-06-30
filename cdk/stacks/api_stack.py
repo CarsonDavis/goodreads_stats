@@ -23,12 +23,12 @@ class ApiStack(Stack):
         lambda_layer = _lambda.LayerVersion(
             self, "SharedLayer",
             code=_lambda.Code.from_asset(
-                "lambda_code/shared",
+                ".",
                 bundling=BundlingOptions(
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
                         "bash", "-c",
-                        "pip install -r requirements.txt -t /asset-output/python && "
+                        "pip install -r lambda_code/shared/requirements.txt -t /asset-output/python && "
                         "cp -r genres /asset-output/python/"
                     ]
                 )
