@@ -45,10 +45,11 @@ class FrontendStack(Stack):
         # CloudFront distribution
         # Configure origin based on environment
         if deployment_env == "prod" and oai:
-            # Use deprecated S3Origin temporarily until we can fix the API
+            # Use S3 with OAI for production - force regular S3 endpoint, not website endpoint
             website_origin = origins.S3Origin(
                 storage_stack.website_bucket,
-                origin_access_identity=oai
+                origin_access_identity=oai,
+                s3_bucket_source=storage_stack.website_bucket
             )
         else:
             # For dev, use S3 static website hosting  
