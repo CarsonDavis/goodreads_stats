@@ -5,7 +5,8 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     Duration,
-    CfnOutput
+    CfnOutput,
+    BundlingOptions
 )
 from constructs import Construct
 import os
@@ -34,7 +35,7 @@ class ApiStack(Stack):
             self, "SharedLayer",
             code=_lambda.Code.from_asset(
                 "lambda_code/shared",
-                bundling=_lambda.BundlingOptions(
+                bundling=BundlingOptions(
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
                         "bash", "-c",
