@@ -45,13 +45,14 @@ class FrontendStack(Stack):
         # CloudFront distribution
         # Configure origin based on environment
         if deployment_env == "prod" and oai:
-            website_origin = origins.S3BucketOrigin(
-                bucket=storage_stack.website_bucket,
+            # Use deprecated S3Origin temporarily until we can fix the API
+            website_origin = origins.S3Origin(
+                storage_stack.website_bucket,
                 origin_access_identity=oai
             )
         else:
-            # For dev, use S3 static website hosting
-            website_origin = origins.S3StaticWebsiteOrigin(storage_stack.website_bucket)
+            # For dev, use S3 static website hosting  
+            website_origin = origins.S3Origin(storage_stack.website_bucket)
         
         self.distribution = cloudfront.Distribution(
             self, "Distribution",
@@ -66,7 +67,7 @@ class FrontendStack(Stack):
             additional_behaviors={
                 # API calls should not be cached
                 "/api/*": cloudfront.BehaviorOptions(
-                    origin=origins.RestApiOrigin.from_rest_api(api_stack.api),
+                    origin=origins.RestApiOrigin(api_stack.api),
                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                     cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
                     origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
