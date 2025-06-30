@@ -42,6 +42,13 @@ class FrontendStack(Stack):
         # Use OAI from storage stack (for production) or None (for dev)
         oai = storage_stack.oai
         
+        # CloudFront function for URL rewrites
+        rewrite_function = cloudfront.Function(
+            self, "RewriteFunction",
+            code=cloudfront.FunctionCode.from_file(file_path="cdk/cloudfront_function.js"),
+            function_name=f"goodreads-stats-rewrite-{deployment_env}"
+        )
+        
         # CloudFront distribution
         # Configure origin based on environment
         if deployment_env == "prod" and oai:
@@ -62,7 +69,13 @@ class FrontendStack(Stack):
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 compress=True,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-                cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS
+                cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+                function_associations=[
+                    cloudfront.FunctionAssociation(
+                        function=rewrite_function,
+                        event_type=cloudfront.FunctionEventType.VIEWER_REQUEST
+                    )
+                ]
             ),
             additional_behaviors={
                 # API calls should not be cached
@@ -91,21 +104,6 @@ class FrontendStack(Stack):
             domain_names=[domain_name],
             certificate=certificate,
             default_root_object="index.html",
-            error_responses=[
-                # Redirect missing pages to home page
-                cloudfront.ErrorResponse(
-                    http_status=404,
-                    response_http_status=200,
-                    response_page_path="/index.html",
-                    ttl=Duration.minutes(5)
-                ),
-                cloudfront.ErrorResponse(
-                    http_status=403,
-                    response_http_status=200,
-                    response_page_path="/index.html",
-                    ttl=Duration.minutes(5)
-                )
-            ],
             comment=f"Goodreads Stats distribution - {deployment_env}",
             price_class=cloudfront.PriceClass.PRICE_CLASS_100  # US, Canada, Europe
         )

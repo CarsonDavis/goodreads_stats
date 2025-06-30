@@ -2,18 +2,18 @@
 
 ## Overview
 
-The Goodreads Stats system is a **flexible architecture** that supports three execution modes: local simple processing, local API development, and cloud production. The system transforms Goodreads CSV exports into enriched JSON datasets that power interactive dashboards with automatic environment detection.
+The Goodreads Stats system is a cloud-native application that transforms Goodreads CSV exports into enriched JSON datasets, powering interactive dashboards. It is built on a serverless architecture using AWS services, deployed via AWS CDK and GitHub Actions. The system also supports local development and testing.
 
 ## High-Level Architecture
 
-The system supports **three execution modes** with environment auto-detection:
+The system operates in two primary modes: local development and cloud production.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     GOODREADS STATS SYSTEM                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  EXECUTION MODE 1: Local Simple (Current)                      │
+│  EXECUTION MODE 1: Local Development                            │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────┐ │
 │  │   CSV Upload    │───▶│  Manual Pipeline │───▶│ Static      │ │
 │  │   (Frontend)    │    │  (run_smart_*)   │    │ Dashboard   │ │
@@ -25,19 +25,7 @@ The system supports **three execution modes** with environment auto-detection:
 │                          │ (dashboard_data)│                    │
 │                          └─────────────────┘                    │
 │                                                                 │
-│  EXECUTION MODE 2: Local API Development                       │
-│  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────┐ │
-│  │   CSV Upload    │───▶│   FastAPI Server │───▶│ Static      │ │
-│  │   (Frontend)    │    │  (local_server)  │    │ Dashboard   │ │
-│  └─────────────────┘    └──────────────────┘    └─────────────┘ │
-│           │                       │                       │     │
-│           │                       ▼                       │     │
-│           │              ┌─────────────────┐              │     │
-│           └─────────────▶│ Local JSON Files│◀─────────────┘     │
-│                          │ (dashboard_data)│                    │
-│                          └─────────────────┘                    │
-│                                                                 │
-│  EXECUTION MODE 3: Cloud Production                            │
+│  EXECUTION MODE 2: Cloud Production (AWS)                       │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────┐ │
 │  │   CSV Upload    │───▶│  Lambda Pipeline │───▶│ Static      │ │
 │  │   (Frontend)    │    │  (AWS Serverless)│    │ Dashboard   │ │
@@ -51,172 +39,93 @@ The system supports **three execution modes** with environment auto-detection:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Data Flow
+## Data Flow (Production)
 
-1. **CSV Input** → User uploads Goodreads export CSV
-2. **Processing** → Python pipeline enriches data with genres/thumbnails 
-3. **JSON Output** → Structured dashboard JSON with UUID filename
-4. **Visualization** → Frontend loads JSON and renders interactive dashboard
+1.  **Upload:** The user uploads a Goodreads CSV file via the frontend, which sends it to an API Gateway endpoint.
+2.  **Trigger:** API Gateway triggers the `UploadHandler` Lambda function.
+3.  **Orchestration:** The `UploadHandler` invokes the `Orchestrator` Lambda function asynchronously to begin processing.
+4.  **Enrichment:** The `Orchestrator` function processes the CSV, calling the Google Books and Open Library APIs to enrich the data.
+5.  **Storage:** The enriched data is saved as a JSON file in an S3 bucket.
+6.  **Status Check:** The frontend polls a `StatusChecker` Lambda function to monitor the processing status.
+7.  **Visualization:** Once processing is complete, the frontend retrieves the JSON from S3 and renders the dashboard.
 
 ---
 
-## Backend Architecture (Python Pipeline)
+## Backend Architecture (AWS Serverless)
 
-### Main Entry Point: `run_smart_pipeline.py`
+### AWS Services
 
-**Environment-Aware Execution Strategy:**
-- **Local Development**: 15 concurrent async threads (4-6 minutes, free)
-- **AWS Lambda**: 1 Lambda function per book (0.39 seconds, ~$0.000002)
+*   **API Gateway:** Provides RESTful endpoints for file uploads, status checks, and data retrieval.
+*   **AWS Lambda:**
+    *   `UploadHandler`: Receives the uploaded file and triggers the processing pipeline.
+    *   `Orchestrator`: The core processing engine that enriches the Goodreads data.
+    *   `StatusChecker`: Provides the status of the enrichment process to the frontend.
+*   **S3:**
+    *   **Data Bucket:** Stores uploaded CSVs, processed JSON data, and status files.
+    *   **Website Bucket:** Hosts the static frontend assets (HTML, CSS, JS).
+*   **CloudFront:** Acts as a CDN for the static frontend and a reverse proxy for the API Gateway.
+*   **Route 53:** Manages the DNS for the application's custom domain.
+*   **Certificate Manager:** Provides SSL/TLS certificates for the custom domain.
 
 ### Pipeline Components
 
+The core data processing logic is shared between local and cloud environments, located in the `genres/` directory.
+
 #### 1. CSV Processing (`genres/pipeline/csv_loader.py`)
-- **Class**: `AnalyticsCSVProcessor`
-- **Input**: Goodreads CSV export
-- **Processing**: 
-  - Parses all CSV fields using pandas
-  - Handles re-reads (uses latest read date)
-  - Data cleaning and validation
-  - Creates `BookAnalytics` objects
-- **Output**: List of analytics-ready book objects
+
+*   **Class**: `AnalyticsCSVProcessor`
+*   **Input**: Goodreads CSV export
+*   **Processing**:
+    *   Parses all CSV fields using pandas.
+    *   Handles re-reads (uses latest read date).
+    *   Data cleaning and validation.
+    *   Creates `BookAnalytics` objects.
+*   **Output**: List of analytics-ready book objects.
 
 #### 2. Genre Enrichment (`genres/pipeline/enricher.py`)
 
-**Multi-Source API Strategy:**
-- **Google Books API**: Primary source for mainstream books
-- **Open Library API**: Fallback for older/obscure books
-- **Parallel Processing**: Both APIs called simultaneously
-
-**Classes:**
-- `AsyncGenreEnricher`: High-performance async enricher with rate limiting
-- `EnvironmentAwareBookPipeline`: Smart execution (local vs Lambda)
-- `AdaptiveGenreEnricher`: Fallback strategies and retry logic
-
-**Concurrency Control:**
-- Semaphore-based rate limiting
-- Exponential backoff for failed requests
-- Circuit breaker patterns for API failures
-
-#### 3. Data Processing Flow
-
-```python
-BookInfo → API Calls → EnrichedBook → BookAnalytics → Dashboard JSON
-     ↓         ↓            ↓             ↓              ↓
-  Basic    Genre Data   Thumbnails   Time Series    Final Export
-  Fields     +          + Covers     Analytics      (UUID.json)
-           Subjects
-```
-
-#### 4. JSON Export (`genres/pipeline/exporter.py`)
-- **Class**: `FinalJSONExporter`
-- **Output**: UUID-named JSON files in `dashboard_data/`
-- **Structure**: Optimized for frontend consumption
-- **Metadata**: Export timestamps, processing statistics
-
-### Data Sources Integration
-
-#### Google Books API (`genres/sources/google.py`)
-- **Endpoint**: `https://www.googleapis.com/books/v1/volumes`
-- **Search Strategy**: ISBN → Title+Author fallback
-- **Extracts**: mainCategory, categories[], thumbnail URLs
-
-#### Open Library API (`genres/sources/openlibrary.py`)
-- **Endpoints**: 
-  - Search: `https://openlibrary.org/search.json`
-  - Works: `https://openlibrary.org/works/{id}.json`
-  - Books: `https://openlibrary.org/api/books`
-- **Extracts**: subjects[], cover URLs
-
-#### Genre Merging (`genres/utils/genre_merger.py`)
-- Deduplication and normalization
-- Hierarchical genre mapping
-- Quality scoring and ranking
+*   **Multi-Source API Strategy:**
+    *   **Google Books API**: Primary source for mainstream books.
+    *   **Open Library API**: Fallback for older/obscure books.
+*   **Classes:**
+    *   `AsyncGenreEnricher`: High-performance async enricher with rate limiting.
+    *   `AdaptiveGenreEnricher`: Fallback strategies and retry logic.
 
 ---
 
 ## Frontend Architecture (Static Dashboard)
 
 ### File Structure
+
 ```
 dashboard/
-├── index.html          # Main dashboard (analytics & charts)
-├── books.html          # Filtered book listings  
+├── index.html          # Homepage and CSV upload
+├── dashboard.html      # Main analytics dashboard
+├── books.html          # Filtered book listings
 ├── detail.html         # Individual book details
-├── dashboard.js        # Main dashboard logic
-├── books.js           # Book listing logic
-├── detail.js          # Book detail logic
-└── dashboard.css      # Shared styles
+├── dashboard.js        # Logic for the main dashboard
+├── books.js            # Logic for book listings
+├── detail.js           # Logic for book details
+└── dashboard.css       # Shared styles
 ```
 
 ### URL Structure
-```
-/                                    → Homepage (CSV upload) 
-/dashboard?uuid={id}                 → Main analytics dashboard
-/books?uuid={id}&type={filter}&value={value}  → Filtered book listings
-/detail?uuid={id}&id={book_id}&return={url}   → Individual book details
-```
 
-### Frontend Components
+*   `/`: Homepage (CSV upload)
+*   `/dashboard?uuid={id}`: Main analytics dashboard
+*   `/books?uuid={id}&type={filter}&value={value}`: Filtered book listings
+*   `/detail?uuid={id}&id={book_id}&return={url}`: Individual book details
 
-#### 1. Homepage (`/index.html`)
-- **Purpose**: Entry point and CSV upload
-- **Features**:
-  - Project explanation
-  - Drag-and-drop CSV upload
-  - Client-side CSV parsing (basic)
-  - Instructions for full processing
-  - Link to sample dashboard
+### CloudFront URL Handling
 
-#### 2. Dashboard (`/dashboard.html`)
-- **Class**: `ReadingDashboard` (dashboard.js)
-- **Data Loading**: UUID-based JSON fetching
-- **Visualizations**: Chart.js for interactive charts
-- **Features**:
-  - Summary statistics cards
-  - Books by year (line chart)
-  - Rating distribution (bar chart)  
-  - Top genres (pie chart)
-  - Pages read timeline
-  - Recent books table
-  - Dark mode toggle
-
-#### 3. Books Listing (`/books.html`)
-- **Class**: `BooksPage` (books.js)
-- **Filtering**: Genre, rating, year, pages-per-year
-- **Features**:
-  - Grid layout with book cards
-  - Thumbnail images (when available)
-  - Click-through to detail pages
-  - Breadcrumb navigation
-
-#### 4. Book Details (`/detail.html`)
-- **Class**: `BookDetailPage` (detail.js)
-- **Features**:
-  - Full book information display
-  - Cover image and metadata
-  - Genre tags and ratings
-  - Navigation back to filtered views
-
-### Data Loading Strategy
-
-#### Local Development
-```javascript
-// Direct path to UUID JSON files from dashboard folder
-const dataUrl = `dashboard_data/${uuid}.json`;
-```
-
-#### Production Deployment
-```javascript
-// S3 or CDN-based loading
-const baseUrl = window.S3_BASE_URL || 'https://your-bucket.s3.amazonaws.com';
-const dataUrl = `${baseUrl}/${uuid}.json`;
-```
+The CloudFront distribution is configured to handle requests for pages that don't map directly to an S3 object. For example, a request to `/dashboard` (which doesn't exist as an object) results in an S3 404 error. CloudFront catches this error and serves `/index.html` as the response. This is the root cause of the navigation issue. A proper fix involves using a CloudFront Function or Lambda@Edge to rewrite the URI (e.g., `/dashboard` to `/dashboard.html`) before the request hits the S3 origin.
 
 ---
 
 ## Data Models
 
 ### BookAnalytics (Python)
+
 ```python
 @dataclass
 class BookAnalytics:
@@ -224,13 +133,13 @@ class BookAnalytics:
     goodreads_id: str
     title: str
     author: str
-    
+
     # Analytics fields
     my_rating: Optional[int]
     date_read: Optional[date]
     reading_year: Optional[int]
     num_pages: Optional[int]
-    
+
     # Enriched data
     final_genres: List[str] = field(default_factory=list)
     thumbnail_url: Optional[str] = None
@@ -238,8 +147,50 @@ class BookAnalytics:
 ```
 
 ### Dashboard JSON Structure
+
 ```json
 {
+  "export_id": "uuid-v4",
+  "export_timestamp": "ISO-8601",
+  "total_books": 1234,
+  "enrichment_stats": {
+    "google_success_rate": 0.85,
+    "openlibrary_success_rate": 0.73,
+    "final_enrichment_rate": 0.91
+  },
+  "books": [
+    {
+      "goodreads_id": "12345",
+      "title": "Book Title",
+      "author": "Author Name",
+      "my_rating": 4,
+      "date_read": "2023-12-01",
+      "reading_year": 2023,
+      "num_pages": 320,
+      "genres": ["Fiction", "Fantasy"],
+      "thumbnail_url": "https://...",
+      "small_thumbnail_url": "https://..."
+    }
+  ]
+}
+```
+
+---
+
+## Deployment
+
+The application is deployed using a CI/CD pipeline powered by **GitHub Actions** and **AWS CDK**.
+
+*   **Infrastructure as Code:** The entire AWS infrastructure is defined in Python using the AWS CDK in the `cdk/` directory.
+*   **Continuous Deployment:** Pushing to the `main` branch triggers a GitHub Actions workflow that deploys the CDK stacks and the frontend to the production environment.
+*   **Environments:** The `main` branch deploys to production, while other branches can be deployed to a development environment.
+
+### Deployment Steps
+
+1.  **Push to GitHub:** A push to a configured branch triggers the `deploy.yml` workflow.
+2.  **Deploy CDK Stacks:** The workflow installs dependencies, and runs `cdk deploy` to provision or update the AWS resources (S3, Lambda, API Gateway, etc.).
+3.  **Deploy Frontend:** The workflow syncs the contents of the `dashboard/` directory to the S3 website bucket.
+4.  **Invalidate CloudFront:** The workflow invalidates the CloudFront cache to ensure users get the latest version of the frontend.
   "export_id": "uuid-v4",
   "export_timestamp": "ISO-8601",
   "total_books": 1234,

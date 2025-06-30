@@ -28,6 +28,7 @@ class ApiStack(Stack):
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
                         "bash", "-c",
+                        "ls -la . && "
                         "pip install -r cdk/lambda_code/shared/requirements.txt -t /asset-output/python && "
                         "cp -r genres /asset-output/python/"
                     ]
