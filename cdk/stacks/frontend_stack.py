@@ -45,7 +45,7 @@ class FrontendStack(Stack):
         # CloudFront function for URL rewrites
         rewrite_function = cloudfront.Function(
             self, "RewriteFunction",
-            code=cloudfront.FunctionCode.from_file(file_path="cdk/cloudfront_function.js"),
+            code=cloudfront.FunctionCode.from_file(file_path="cloudfront_function.js"),
             function_name=f"goodreads-stats-rewrite-{deployment_env}"
         )
         
