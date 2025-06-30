@@ -1,6 +1,6 @@
-# Dependencies for Lambda layer (subset of main requirements.txt)
+# Lambda Layer Dependencies (minimal for performance)
 aiohttp==3.9.1
 pandas==2.1.4
 numpy==1.24.4
 python-dateutil==2.8.2
-boto3>=1.26.0
+# boto3 is included in Lambda runtime

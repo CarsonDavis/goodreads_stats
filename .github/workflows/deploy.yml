@@ -71,11 +71,6 @@ jobs:
           mkdir -p cdk/lambda_code/shared/
           cp -r genres cdk/lambda_code/shared/
           
-          # Copy main requirements.txt to shared layer if it exists
-          if [ -f "requirements.txt" ]; then
-            cp requirements.txt cdk/lambda_code/shared/
-          fi
-          
       - name: Deploy CDK stacks
         id: deploy-cdk
         working-directory: ./cdk

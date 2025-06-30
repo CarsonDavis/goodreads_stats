@@ -23,6 +23,12 @@ class StorageStack(Stack):
             bucket_name=bucket_name,
             versioned=False,  # Keep it simple
             public_read_access=True,  # Dashboard JSONs need to be publicly readable
+            block_public_access=s3.BlockPublicAccess(
+                block_public_acls=False,
+                block_public_policy=False,
+                ignore_public_acls=False,
+                restrict_public_buckets=False
+            ),
             website_index_document="index.html",
             cors=[
                 s3.CorsRule(
@@ -85,6 +91,7 @@ class StorageStack(Stack):
                 self, "WebsiteBucket",
                 bucket_name="goodreads-stats-website-prod",
                 public_read_access=False,  # CloudFront will access via OAI
+                block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Block all public access for security
                 website_index_document="index.html",
                 website_error_document="404.html",
                 removal_policy=RemovalPolicy.RETAIN
@@ -95,6 +102,12 @@ class StorageStack(Stack):
                 self, "WebsiteBucket", 
                 bucket_name=f"goodreads-stats-website-{deployment_env}",
                 public_read_access=True,
+                block_public_access=s3.BlockPublicAccess(
+                    block_public_acls=False,
+                    block_public_policy=False,
+                    ignore_public_acls=False,
+                    restrict_public_buckets=False
+                ),
                 website_index_document="index.html",
                 website_error_document="404.html",
                 removal_policy=RemovalPolicy.DESTROY
