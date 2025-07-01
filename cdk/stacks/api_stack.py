@@ -30,9 +30,15 @@ class ApiStack(Stack):
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
                         "bash", "-c",
+                        "echo 'Starting Lambda layer bundling...' && "
                         "ls -la . && "
+                        "echo 'Installing requirements...' && "
                         "pip install -r cdk/lambda_code/shared/requirements.txt -t /asset-output/python && "
-                        "cp -r genres /asset-output/python/"
+                        "echo 'Copying genres package...' && "
+                        "ls -la genres/ && "
+                        "cp -r genres /asset-output/python/ && "
+                        "echo 'Verifying layer contents...' && "
+                        "ls -la /asset-output/python/"
                     ]
                 )
             ),
