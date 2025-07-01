@@ -216,3 +216,18 @@ results/
 output/
 logs/
 dashboard_data/
+
+# CDK build outputs
+cdk/cdk.out/
+cdk/cdk.context.json
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+
+# Temporary files
+*.zip
+local_server.py
+test_local_api.py
+docker-test.sh

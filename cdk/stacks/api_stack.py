@@ -8,8 +8,6 @@ from aws_cdk import (
     aws_lambda_event_sources as lambda_event_sources,
     aws_events as events,
     aws_events_targets as targets,
-    aws_s3 as s3,
-    aws_s3_notifications as s3n,
     Duration,
     CfnOutput,
     BundlingOptions
@@ -155,38 +153,26 @@ class ApiStack(Stack):
             log_group=aggregator_log_group
         )
         
-        # S3 Event Notification for event-driven aggregation
-        # Trigger aggregator when BookProcessor stores enriched results
-        # Note: This will trigger for EVERY enriched book, aggregator will check if job is complete
-        storage_stack.data_bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.aggregator),
-            s3.NotificationKeyFilter(
-                prefix="processing/"
-            )
+        # CloudWatch Events Rule for aggregator trigger
+        # The aggregator will be triggered periodically to check for completion
+        
+        # Create CloudWatch Events rule to trigger aggregator every minute
+        aggregator_trigger_rule = events.Rule(
+            self, "AggregatorTriggerRule",
+            description="Triggers aggregator to check for completion",
+            schedule=events.Schedule.rate(Duration.minutes(1))
         )
         
-        # CloudWatch Events Rule for aggregator timeout safety (10-minute intervals)
-        # Backup trigger in case S3 events miss any failed processing jobs
-        aggregator_safety_rule = events.Rule(
-            self, "AggregatorSafetyRule", 
-            description="Safety trigger for aggregator to handle timeouts every 10 minutes",
-            schedule=events.Schedule.expression("rate(10 minutes)")
-        )
-        
-        # Add aggregator as target for safety trigger
-        aggregator_safety_rule.add_target(
-            targets.LambdaFunction(
-                self.aggregator, 
-                event=events.RuleTargetInput.from_object({"source": "safety_trigger"})
-            )
+        # Add aggregator as target
+        aggregator_trigger_rule.add_target(
+            targets.LambdaFunction(self.aggregator)
         )
         
         # Grant Events permission to invoke aggregator
         self.aggregator.add_permission(
             "AllowCloudWatchEvents",
             principal=iam.ServicePrincipal("events.amazonaws.com"),
-            source_arn=aggregator_safety_rule.rule_arn
+            source_arn=aggregator_trigger_rule.rule_arn
         )
         
         # Create log group for Orchestrator  

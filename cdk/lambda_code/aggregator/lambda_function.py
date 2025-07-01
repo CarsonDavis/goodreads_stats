@@ -162,31 +162,20 @@ def lambda_handler(event, context):
     """
     Lambda handler for aggregating enriched book results.
     
-    This function can be triggered by:
-    1. S3 events when BookProcessor stores enriched results
-    2. CloudWatch Events safety trigger (every 10 minutes for timeout handling)
-    3. Direct invocation with specific processing_uuid
+    This function is triggered periodically by CloudWatch Events and checks
+    for processing jobs that are ready for aggregation.
     """
     import time
     
     try:
-        logger.info(f"Aggregator triggered: {json.dumps(event, default=str)[:200]}...")
-        
-        # Check if this is an S3 event
-        if 'Records' in event and len(event['Records']) > 0 and event['Records'][0].get('eventSource') == 'aws:s3':
-            return handle_s3_completion_event(event)
-        
-        # Check if this is a safety trigger for timeout handling
-        elif event.get('source') == 'safety_trigger':
-            return handle_timeout_safety_check()
+        logger.info("Aggregator triggered - checking for ready processing jobs")
         
         # Check if this is a direct invocation with specific processing_uuid
-        elif event.get('processing_uuid'):
+        if event.get('processing_uuid'):
             return process_specific_job(event)
         
-        # Legacy scheduled trigger - check for ready jobs
-        else:
-            return check_and_process_ready_jobs()
+        # This is a scheduled trigger - check for ready jobs
+        return check_and_process_ready_jobs()
         
     except Exception as e:
         logger.error(f"Aggregator error: {str(e)}")
@@ -321,10 +310,8 @@ def process_job_aggregation(processing_uuid: str):
             
             enriched_results_map[book_key] = enriched_data['enriched_result']
         
-        # Allow partial results - some books may have failed enrichment
-        if len(enriched_results_map) < len(original_books):
-            missing_count = len(original_books) - len(enriched_results_map)
-            logger.warning(f"Missing {missing_count} enriched results out of {len(original_books)} books - proceeding with partial results")
+        if len(enriched_results_map) != len(original_books):
+            raise ValueError(f"Mismatch: {len(original_books)} original books vs {len(enriched_results_map)} enriched results")
         
         logger.info(f"Processing {len(original_books)} books for UUID: {processing_uuid}")
         
@@ -409,181 +396,6 @@ def process_specific_job(event):
         raise ValueError("No processing_uuid provided")
     
     return process_job_aggregation(processing_uuid)
-
-
-def handle_s3_completion_event(event):
-    """Handle S3 event when a BookProcessor stores an enriched result"""
-    try:
-        # Extract processing UUID from S3 key
-        s3_record = event['Records'][0]
-        bucket = s3_record['s3']['bucket']['name']
-        key = s3_record['s3']['object']['key']
-        
-        logger.info(f"S3 event for key: {key}")
-        
-        # Only process enriched results files, ignore other processing files
-        if not key.startswith('processing/') or '/enriched/' not in key or not key.endswith('.json'):
-            logger.info(f"Ignoring S3 event for non-enriched file: {key}")
-            return {'statusCode': 200, 'message': 'Ignored non-enriched file'}
-        
-        # Extract processing_uuid from key: processing/{uuid}/enriched/{filename}.json
-        path_parts = key.split('/')
-        if len(path_parts) < 3:
-            logger.warning(f"Invalid processing path structure: {key}")
-            return {'statusCode': 200, 'message': 'Invalid path structure'}
-            
-        processing_uuid = path_parts[1]
-        logger.info(f"S3 event for processing job: {processing_uuid}")
-        
-        # Check if this job is ready for aggregation
-        if is_job_ready_for_aggregation(processing_uuid):
-            logger.info(f"Job {processing_uuid} is ready - triggering aggregation")
-            return process_job_aggregation(processing_uuid)
-        else:
-            logger.info(f"Job {processing_uuid} not ready yet - waiting for more files")
-            return {'statusCode': 200, 'message': 'Job not ready yet'}
-        
-    except Exception as e:
-        logger.error(f"Error handling S3 completion event: {e}")
-        return {
-            'statusCode': 500,
-            'error': str(e)
-        }
-
-
-def handle_timeout_safety_check():
-    """Handle safety trigger to check for jobs that may have timed out"""
-    try:
-        logger.info("Running timeout safety check")
-        bucket_name = os.environ['S3_BUCKET_NAME']
-        
-        # List all processing directories
-        response = s3_client.list_objects_v2(
-            Bucket=bucket_name,
-            Prefix="processing/",
-            Delimiter="/"
-        )
-        
-        if 'CommonPrefixes' not in response:
-            logger.info("No processing jobs found during safety check")
-            return {'statusCode': 200, 'message': 'No processing jobs found'}
-        
-        timeout_jobs_processed = 0
-        current_time = __import__('time').time()
-        
-        for prefix in response['CommonPrefixes']:
-            processing_uuid = prefix['Prefix'].split('/')[-2]
-            
-            # Check if job has timed out (10 minutes = 600 seconds)
-            if is_job_timed_out(processing_uuid, current_time, timeout_minutes=10):
-                logger.warning(f"Job {processing_uuid} has timed out - processing partial results")
-                result = process_job_aggregation_with_timeout(processing_uuid)
-                if result.get('statusCode') == 200:
-                    timeout_jobs_processed += 1
-        
-        logger.info(f"Safety check complete - processed {timeout_jobs_processed} timed out jobs")
-        return {
-            'statusCode': 200,
-            'timeout_jobs_processed': timeout_jobs_processed,
-            'message': f'Safety check processed {timeout_jobs_processed} timed out jobs'
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in timeout safety check: {e}")
-        return {
-            'statusCode': 500,
-            'error': str(e)
-        }
-
-
-def is_job_timed_out(processing_uuid: str, current_time: float, timeout_minutes: int = 10) -> bool:
-    """Check if a processing job has timed out"""
-    try:
-        bucket_name = os.environ['S3_BUCKET_NAME']
-        
-        # Check status to get job start time
-        status_key = f"status/{processing_uuid}.json"
-        try:
-            obj = s3_client.get_object(Bucket=bucket_name, Key=status_key)
-            status = json.loads(obj['Body'].read().decode('utf-8'))
-            
-            # Skip if already complete or error
-            if status.get('status') in ['complete', 'error']:
-                return False
-            
-            # Check if job is old enough to be considered timed out
-            last_updated = status.get('last_updated')
-            if last_updated:
-                # Try to parse ISO format timestamp
-                try:
-                    from datetime import datetime
-                    last_update_time = datetime.fromisoformat(last_updated.replace('Z', '+00:00')).timestamp()
-                    age_minutes = (current_time - last_update_time) / 60
-                    
-                    if age_minutes > timeout_minutes:
-                        logger.warning(f"Job {processing_uuid} is {age_minutes:.1f} minutes old (timeout: {timeout_minutes})")
-                        return True
-                except:
-                    # Fallback: assume integer timestamp
-                    try:
-                        last_update_time = float(last_updated)
-                        age_minutes = (current_time - last_update_time) / 60
-                        return age_minutes > timeout_minutes
-                    except:
-                        pass
-            
-        except:
-            # No status file or parse error - check processing directory age
-            try:
-                # Check age of processing directory itself
-                original_books_key = f"processing/{processing_uuid}/original_books.json"
-                obj_info = s3_client.head_object(Bucket=bucket_name, Key=original_books_key)
-                create_time = obj_info['LastModified'].timestamp()
-                age_minutes = (current_time - create_time) / 60
-                return age_minutes > timeout_minutes
-            except:
-                pass
-        
-        return False
-        
-    except Exception as e:
-        logger.error(f"Error checking timeout for {processing_uuid}: {e}")
-        return False
-
-
-def process_job_aggregation_with_timeout(processing_uuid: str):
-    """Process aggregation for a job that has timed out (may have partial results)"""
-    try:
-        logger.warning(f"Processing timed out job {processing_uuid} with partial results")
-        
-        # Update status to indicate timeout handling
-        update_processing_status(
-            processing_uuid, 
-            'processing', 
-            message="Job timed out - processing partial results"
-        )
-        
-        # Try to process whatever results we have
-        return process_job_aggregation(processing_uuid)
-        
-    except Exception as e:
-        logger.error(f"Failed to process timed out job {processing_uuid}: {e}")
-        
-        # Mark as error due to timeout
-        update_processing_status(
-            processing_uuid, 
-            'error', 
-            0, 
-            f"Job timed out and failed to process partial results: {str(e)}"
-        )
-        
-        return {
-            'statusCode': 500,
-            'body': {
-                'error': str(e),
-                'message': 'Timed out job failed to process'
-            }
-        }
 
 
 def cleanup_processing_files(processing_uuid: str):

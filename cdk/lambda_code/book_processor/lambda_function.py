@@ -106,8 +106,8 @@ def lambda_handler(event, context):
                     # Process the book
                     result = asyncio.run(enrich_single_book(book_data))
                     
-                    # Store enriched result in S3 for aggregator (both success and failure)
-                    if processing_uuid:
+                    # Store enriched result in S3 for aggregator
+                    if processing_uuid and result.get('statusCode') == 200:
                         store_enriched_result(processing_uuid, book_data, result, message_body)
                     
                     results.append(result)
