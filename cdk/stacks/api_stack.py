@@ -120,7 +120,9 @@ class ApiStack(Stack):
             payload=sfn.TaskInput.from_object({
                 "action": "load_books",
                 "bucket.$": "$.bucket", 
-                "books_s3_key.$": "$.books_s3_key"
+                "books_s3_key.$": "$.books_s3_key",
+                "processing_uuid.$": "$.processing_uuid",
+                "original_books_s3_key.$": "$.original_books_s3_key"
             }),
             output_path="$.Payload"
         )

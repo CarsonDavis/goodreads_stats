@@ -130,7 +130,7 @@ def load_books_from_s3(event):
     
     logger.info(f"Loaded {len(books_data)} books from S3")
     
-    # Return books data with other Step Function context
+    # Return books data with other Step Function context for Map state
     return {
         'books': books_data,
         'processing_uuid': event.get('processing_uuid'),
