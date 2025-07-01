@@ -132,7 +132,10 @@ class ApiStack(Stack):
             max_concurrency=1000,
             items_path="$.books",
             parameters={
-                "book.$": "$"
+                "book.$": "$",
+                "processing_uuid.$": "$.processing_uuid",
+                "bucket.$": "$.bucket",
+                "original_books_s3_key.$": "$.original_books_s3_key"
             }
         ).iterator(book_processor_task)
         
@@ -140,9 +143,9 @@ class ApiStack(Stack):
             self, "AggregateResultsTask",
             lambda_function=self.aggregator,
             payload=sfn.TaskInput.from_object({
-                "processing_uuid.$": "$.processing_uuid",
-                "bucket.$": "$.bucket",
-                "original_books_s3_key.$": "$.original_books_s3_key",
+                "processing_uuid.$": "$[0].processing_uuid",
+                "bucket.$": "$[0].bucket",
+                "original_books_s3_key.$": "$[0].original_books_s3_key",
                 "enriched_results.$": "$"  # Map state output goes here
             }),
             output_path="$.Payload"
