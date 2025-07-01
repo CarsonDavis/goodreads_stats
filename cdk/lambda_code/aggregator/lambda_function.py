@@ -115,20 +115,29 @@ def update_processing_status(processing_uuid: str, status: str, progress: int = 
         message: Additional status message
     """
     try:
+        import time
         bucket_name = os.environ['S3_BUCKET_NAME']
         status_key = f"status/{processing_uuid}.json"
         
-        status_data = {
+        # Get current status and update it
+        try:
+            obj = s3_client.get_object(Bucket=bucket_name, Key=status_key)
+            current_status = json.loads(obj['Body'].read().decode('utf-8'))
+        except:
+            current_status = {}
+        
+        # Update with new values
+        current_status.update({
             'status': status,
-            'progress': progress,
             'message': message,
-            'timestamp': str(int(time.time()))
-        }
+            'last_updated': str(int(time.time())),
+            'progress': {'percent_complete': progress}
+        })
         
         s3_client.put_object(
             Bucket=bucket_name,
             Key=status_key,
-            Body=json.dumps(status_data),
+            Body=json.dumps(current_status),
             ContentType='application/json'
         )
         
@@ -205,8 +214,8 @@ def lambda_handler(event, context):
         logger.info(f"Creating dashboard JSON locally at: {local_json_path}")
         json_file_path = create_dashboard_json(enhanced_books, local_json_path)
         
-        # Upload to S3
-        s3_key = f"data/{processing_uuid}/dashboard.json"
+        # Upload to S3 (path must match what status_checker expects)
+        s3_key = f"data/{processing_uuid}.json"
         logger.info(f"Uploading dashboard JSON to s3://{bucket_name}/{s3_key}")
         
         with open(json_file_path, 'rb') as f:
