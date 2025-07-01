@@ -9,14 +9,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Prevent Dark Reader from interfering with our dark theme */
-        html[data-darkreader-mode], 
+        html[data-darkreader-mode],
         html[data-darkreader-scheme] {
             --darkreader-neutral-background: #111827 !important;
             --darkreader-neutral-text: #ffffff !important;
         }
-        
+
         /* Force specific elements to ignore Dark Reader */
-        button, .btn, a[class*="bg-"], [class*="bg-gradient"] {
+        button,
+        .btn,
+        a[class*="bg-"],
+        [class*="bg-gradient"] {
             filter: none !important;
         }
 
@@ -34,15 +37,15 @@
             border-color: #4F46E5;
             background-color: rgba(79, 70, 229, 0.1);
         }
-        
+
         /* Ensure buttons maintain their styling */
-        button[class*="bg-blue"], 
+        button[class*="bg-blue"],
         a[class*="bg-blue"],
         button[class*="bg-gradient"],
         a[class*="bg-gradient"] {
             filter: none !important;
         }
-        
+
         /* Specific fix for sample dashboard button */
         a[href*="dashboard?uuid"] {
             background: linear-gradient(to right, #2563eb, #7c3aed) !important;
@@ -50,11 +53,11 @@
             filter: none !important;
             -webkit-filter: none !important;
         }
-        
+
         a[href*="dashboard?uuid"]:hover {
             background: linear-gradient(to right, #1d4ed8, #6d28d9) !important;
         }
-        
+
         /* Fix for upload button */
         button[class*="bg-blue-600"] {
             background-color: #2563eb !important;
@@ -62,7 +65,7 @@
             filter: none !important;
             -webkit-filter: none !important;
         }
-        
+
         button[class*="bg-blue-600"]:hover {
             background-color: #1d4ed8 !important;
         }
@@ -111,7 +114,8 @@
                 </div>
 
                 <!-- Sample Dashboard Link -->
-                <div class="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl shadow-lg p-8 mb-8 text-center border border-gray-600">
+                <div
+                    class="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl shadow-lg p-8 mb-8 text-center border border-gray-600">
                     <div class="text-4xl mb-4">🌟</div>
                     <h3 class="text-2xl font-semibold text-white mb-4">See It In Action</h3>
                     <p class="text-gray-300 mb-6">
@@ -177,7 +181,7 @@
         <footer class="bg-black text-white py-8">
             <div class="container mx-auto px-6 text-center">
                 <p class="opacity-75">
-                    Built with ❤️ for book lovers • Your data stays private and is processed locally
+                    Built with ❤️ for book lovers • Delete your data at any time
                 </p>
             </div>
         </footer>
