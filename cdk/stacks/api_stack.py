@@ -98,6 +98,13 @@ class ApiStack(Stack):
         storage_stack.data_bucket.grant_read_write(orchestrator_role)
         self.book_processing_queue.grant_send_messages(orchestrator_role)
         
+        # Create log group for BookProcessor
+        book_processor_log_group = logs.LogGroup(
+            self, "BookProcessorLogGroup",
+            log_group_name=f"/aws/lambda/BookProcessor-{deployment_env}",
+            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+        )
+        
         # BookProcessor Lambda - Processes individual books
         self.book_processor = _lambda.Function(
             self, "BookProcessor",
@@ -109,7 +116,7 @@ class ApiStack(Stack):
             role=book_processor_role,
             environment=base_env,
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+            log_group=book_processor_log_group
         )
         
         # Add SQS event source to BookProcessor
@@ -119,6 +126,13 @@ class ApiStack(Stack):
                 batch_size=1,  # Process one book at a time
                 max_batching_window=Duration.seconds(1)
             )
+        )
+        
+        # Create log group for Aggregator
+        aggregator_log_group = logs.LogGroup(
+            self, "AggregatorLogGroup",
+            log_group_name=f"/aws/lambda/Aggregator-{deployment_env}",
+            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
         # Aggregator Lambda - Combines results and creates final JSON
@@ -135,17 +149,17 @@ class ApiStack(Stack):
                 "S3_BUCKET_NAME": storage_stack.data_bucket.bucket_name
             },
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+            log_group=aggregator_log_group
         )
         
         # CloudWatch Events Rule for aggregator trigger
         # The aggregator will be triggered periodically to check for completion
         
-        # Create CloudWatch Events rule to trigger aggregator every 30 seconds
+        # Create CloudWatch Events rule to trigger aggregator every minute
         aggregator_trigger_rule = events.Rule(
             self, "AggregatorTriggerRule",
             description="Triggers aggregator to check for completion",
-            schedule=events.Schedule.rate(Duration.seconds(30))
+            schedule=events.Schedule.rate(Duration.minutes(1))
         )
         
         # Add aggregator as target
@@ -158,6 +172,13 @@ class ApiStack(Stack):
             "AllowCloudWatchEvents",
             principal=iam.ServicePrincipal("events.amazonaws.com"),
             source_arn=aggregator_trigger_rule.rule_arn
+        )
+        
+        # Create log group for Orchestrator  
+        orchestrator_log_group = logs.LogGroup(
+            self, "OrchestratorLogGroup",
+            log_group_name=f"/aws/lambda/Orchestrator-{deployment_env}",
+            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
         # Orchestrator Lambda (refactored to use SQS)
@@ -174,7 +195,7 @@ class ApiStack(Stack):
                 "BOOK_QUEUE_URL": self.book_processing_queue.queue_url
             },
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+            log_group=orchestrator_log_group
         )
 
         # Upload Handler Lambda role  
@@ -186,6 +207,13 @@ class ApiStack(Stack):
             ]
         )
         storage_stack.data_bucket.grant_read_write(upload_role)
+        
+        # Create log group for Upload Handler
+        upload_handler_log_group = logs.LogGroup(
+            self, "UploadHandlerLogGroup",
+            log_group_name=f"/aws/lambda/UploadHandler-{deployment_env}",
+            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+        )
         
         # Upload Handler Lambda - Add orchestrator function name to environment
         upload_env = {
@@ -203,7 +231,7 @@ class ApiStack(Stack):
             role=upload_role,
             environment=upload_env,
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+            log_group=upload_handler_log_group
         )
         
         # Status Checker Lambda role
@@ -216,6 +244,13 @@ class ApiStack(Stack):
         )
         storage_stack.data_bucket.grant_read_write(status_role)
         
+        # Create log group for Status Checker
+        status_checker_log_group = logs.LogGroup(
+            self, "StatusCheckerLogGroup",
+            log_group_name=f"/aws/lambda/StatusChecker-{deployment_env}",
+            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+        )
+        
         # Status Checker Lambda
         self.status_checker = _lambda.Function(
             self, "StatusChecker",
@@ -227,7 +262,7 @@ class ApiStack(Stack):
             role=status_role,
             environment=base_env,
             layers=[lambda_layer],
-            log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+            log_group=status_checker_log_group
         )
         
         # API Gateway
@@ -250,7 +285,7 @@ class ApiStack(Stack):
         )
         
         # Create request validator after API is created
-        request_validator = apigateway.RequestValidator(
+        _request_validator = apigateway.RequestValidator(
             self, "RequestValidator",
             rest_api=self.api,
             validate_request_body=True,
