@@ -3,7 +3,7 @@ import logging
 import os
 import boto3
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Dict
 import sys
 
 # Add the shared layer to Python path
@@ -19,12 +19,12 @@ logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 # AWS clients
 s3_client = boto3.client('s3')
-stepfunctions_client = boto3.client('stepfunctions')
+sqs_client = boto3.client('sqs')
 
 # Configuration
 DATA_BUCKET = os.environ['DATA_BUCKET']
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'prod')
-STATE_MACHINE_ARN = os.environ['STATE_MACHINE_ARN']
+BOOK_QUEUE_URL = os.environ['BOOK_QUEUE_URL']
 
 def lambda_handler(event, context):
     """
@@ -132,23 +132,12 @@ def process_csv_pipeline(processing_uuid: str, bucket: str, csv_key: str):
             'percent_complete': 20
         }, "Starting genre enrichment")
         
-        # Step 4: Store book data in S3 and prepare Step Function input
-        logger.info(f"Storing {len(book_infos)} books in S3 for Step Function processing")
+        # Step 4: Store original book data in S3 and send SQS messages
+        logger.info(f"Storing original books in S3 and sending {len(book_infos)} messages to SQS")
         
-        # Store book data in S3
-        books_s3_key = f"processing/{processing_uuid}/books_for_enrichment.json"
+        # Store original book data in S3 for aggregator
         original_books_s3_key = f"processing/{processing_uuid}/original_books.json"
-        
-        books_data = [book_info.__dict__ for book_info in book_infos]
         original_books_data = [book.to_dashboard_dict() for book in books]
-        
-        # Upload to S3
-        s3_client.put_object(
-            Bucket=DATA_BUCKET,
-            Key=books_s3_key,
-            Body=json.dumps(books_data),
-            ContentType='application/json'
-        )
         
         s3_client.put_object(
             Bucket=DATA_BUCKET,
@@ -157,40 +146,57 @@ def process_csv_pipeline(processing_uuid: str, bucket: str, csv_key: str):
             ContentType='application/json'
         )
         
-        # Prepare Step Function input with S3 references
-        step_function_input = {
-            "processing_uuid": processing_uuid,
-            "bucket": DATA_BUCKET,
-            "books_s3_key": books_s3_key,
-            "original_books_s3_key": original_books_s3_key,
-            "total_books": len(book_infos)
-        }
-        
         # Update status
         update_status(processing_uuid, 'processing', {
             'total_books': len(book_infos),
             'processed_books': 0,
             'percent_complete': 30
-        }, "Starting Step Function execution")
+        }, "Sending books to SQS queue for parallel processing")
         
-        # Start Step Function execution
-        logger.info(f"Starting Step Function execution for {processing_uuid}")
-        execution_name = f"processing-{processing_uuid}-{int(datetime.now().timestamp())}"
+        # Send individual SQS messages for each book
+        logger.info(f"Sending {len(book_infos)} messages to SQS queue")
         
-        response = stepfunctions_client.start_execution(
-            stateMachineArn=STATE_MACHINE_ARN,
-            name=execution_name,
-            input=json.dumps(step_function_input)
-        )
+        messages_sent = 0
+        batch_size = 10  # SQS batch send limit
         
-        logger.info(f"Step Function execution started: {response['executionArn']}")
+        for i in range(0, len(book_infos), batch_size):
+            batch = book_infos[i:i + batch_size]
+            entries = []
+            
+            for j, book_info in enumerate(batch):
+                message_body = {
+                    'book': book_info.__dict__,
+                    'processing_uuid': processing_uuid,
+                    'bucket': DATA_BUCKET,
+                    'original_books_s3_key': original_books_s3_key
+                }
+                
+                entries.append({
+                    'Id': str(i + j),
+                    'MessageBody': json.dumps(message_body)
+                })
+            
+            # Send batch
+            response = sqs_client.send_message_batch(
+                QueueUrl=BOOK_QUEUE_URL,
+                Entries=entries
+            )
+            
+            messages_sent += len(entries)
+            
+            # Check for failures
+            if 'Failed' in response and response['Failed']:
+                logger.error(f"Failed to send {len(response['Failed'])} messages: {response['Failed']}")
+                raise Exception(f"Failed to send {len(response['Failed'])} SQS messages")
         
-        # Update status with execution info
+        logger.info(f"Successfully sent {messages_sent} messages to SQS")
+        
+        # Update status - processing will now happen asynchronously via SQS
         update_status(processing_uuid, 'processing', {
             'total_books': len(book_infos),
             'processed_books': 0,
             'percent_complete': 40
-        }, "Step Function execution started - enriching books in parallel")
+        }, f"Sent {messages_sent} books to processing queue - enrichment in progress")
         
         # Clean up uploaded CSV
         try:

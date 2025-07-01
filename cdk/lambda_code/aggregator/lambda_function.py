@@ -18,21 +18,31 @@ from genres.pipeline.exporter import create_dashboard_json
 s3_client = boto3.client('s3')
 
 
-def merge_enriched_data(original_books: List[Dict], enriched_results: List[Dict]) -> List[BookAnalytics]:
+def merge_enriched_data(original_books: List[Dict], enriched_results_map: Dict[str, Dict]) -> List[BookAnalytics]:
     """
     Merge enriched data back into BookAnalytics objects.
     
     Args:
         original_books: List of original book dictionaries
-        enriched_results: List of enrichment results from BookProcessor
+        enriched_results_map: Map of book_key -> enrichment results
         
     Returns:
         List of enhanced BookAnalytics objects
     """
     enhanced_books = []
     
-    for original_book, enriched_result in zip(original_books, enriched_results):
+    for original_book in original_books:
         try:
+            # Find the enriched result for this book
+            book_key = original_book.get('goodreads_id')
+            if not book_key:
+                book_key = f"{original_book.get('title', '')}-{original_book.get('author', '')}"
+            
+            enriched_result = enriched_results_map.get(book_key)
+            if not enriched_result:
+                logger.warning(f"No enriched result found for book: {original_book.get('title', 'Unknown')}")
+                enriched_result = {'statusCode': 500, 'body': {'error': 'No enriched result found'}}
+            
             # Filter out computed properties that aren't constructor parameters
             filtered_book_data = {k: v for k, v in original_book.items() 
                                 if k not in ['reading_year', 'reading_month_year', 'is_rated', 
@@ -152,61 +162,167 @@ def lambda_handler(event, context):
     """
     Lambda handler for aggregating enriched book results.
     
-    Expected event format:
-    {
-        "processing_uuid": "...",
-        "bucket": "bucket-name",
-        "original_books_s3_key": "path/to/original_books.json",
-        "enriched_results": [...]
-    }
+    This function is triggered periodically by CloudWatch Events and checks
+    for processing jobs that are ready for aggregation.
     """
     import time
     
     try:
-        logger.info("Starting result aggregation")
+        logger.info("Aggregator triggered - checking for ready processing jobs")
         
-        # Extract data from event
-        processing_uuid = event.get('processing_uuid')
-        bucket = event.get('bucket')
-        original_books_s3_key = event.get('original_books_s3_key')
+        # Check if this is a direct invocation with specific processing_uuid
+        if event.get('processing_uuid'):
+            return process_specific_job(event)
         
-        # Load original books from S3
-        if not bucket or not original_books_s3_key:
-            raise ValueError("Missing bucket or original_books_s3_key")
+        # This is a scheduled trigger - check for ready jobs
+        return check_and_process_ready_jobs()
+        
+    except Exception as e:
+        logger.error(f"Aggregator error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': {
+                'error': str(e),
+                'message': 'Aggregator failed'
+            }
+        }
+
+
+def check_and_process_ready_jobs():
+    """Check for processing jobs that are ready for aggregation"""
+    try:
+        bucket_name = os.environ['S3_BUCKET_NAME']
+        
+        # List all processing directories
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix="processing/",
+            Delimiter="/"
+        )
+        
+        if 'CommonPrefixes' not in response:
+            logger.info("No processing jobs found")
+            return {'statusCode': 200, 'message': 'No processing jobs found'}
+        
+        processed_jobs = 0
+        for prefix in response['CommonPrefixes']:
+            processing_uuid = prefix['Prefix'].split('/')[-2]  # Extract UUID from path
             
-        logger.info(f"Loading original books from s3://{bucket}/{original_books_s3_key}")
-        obj = s3_client.get_object(Bucket=bucket, Key=original_books_s3_key)
+            # Check if this job is ready for aggregation
+            if is_job_ready_for_aggregation(processing_uuid):
+                logger.info(f"Processing ready job: {processing_uuid}")
+                result = process_job_aggregation(processing_uuid)
+                if result.get('statusCode') == 200:
+                    processed_jobs += 1
+        
+        logger.info(f"Processed {processed_jobs} ready jobs")
+        return {
+            'statusCode': 200,
+            'processed_jobs': processed_jobs,
+            'message': f'Processed {processed_jobs} ready jobs'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking ready jobs: {e}")
+        return {
+            'statusCode': 500,
+            'error': str(e)
+        }
+
+
+def is_job_ready_for_aggregation(processing_uuid: str) -> bool:
+    """Check if a processing job is ready for aggregation"""
+    try:
+        bucket_name = os.environ['S3_BUCKET_NAME']
+        
+        # Check if status shows processing is complete
+        status_key = f"status/{processing_uuid}.json"
+        try:
+            obj = s3_client.get_object(Bucket=bucket_name, Key=status_key)
+            status = json.loads(obj['Body'].read().decode('utf-8'))
+            
+            # If already complete or error, skip
+            if status.get('status') in ['complete', 'error']:
+                return False
+                
+            # If not in processing status, skip
+            if status.get('status') != 'processing':
+                return False
+                
+        except:
+            # No status file, skip
+            return False
+        
+        # Check if original books file exists
+        original_books_key = f"processing/{processing_uuid}/original_books.json"
+        try:
+            s3_client.head_object(Bucket=bucket_name, Key=original_books_key)
+        except:
+            return False
+        
+        # Check if enriched results directory exists and has files
+        enriched_prefix = f"processing/{processing_uuid}/enriched/"
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=enriched_prefix
+        )
+        
+        enriched_count = response.get('KeyCount', 0)
+        expected_count = status.get('progress', {}).get('total_books', 0)
+        
+        logger.info(f"Job {processing_uuid}: {enriched_count}/{expected_count} enriched")
+        
+        # Ready if we have enriched results for all books
+        return enriched_count >= expected_count and expected_count > 0
+        
+    except Exception as e:
+        logger.error(f"Error checking job readiness for {processing_uuid}: {e}")
+        return False
+
+
+def process_job_aggregation(processing_uuid: str):
+    """Process aggregation for a specific job"""
+    try:
+        bucket_name = os.environ['S3_BUCKET_NAME']
+        
+        # Load original books
+        original_books_key = f"processing/{processing_uuid}/original_books.json"
+        obj = s3_client.get_object(Bucket=bucket_name, Key=original_books_key)
         original_books = json.loads(obj['Body'].read().decode('utf-8'))
         
-        # Handle Step Functions Map state output format
-        # Step Functions Map state returns results as an array of task outputs
-        enriched_results = event.get('enriched_results', [])
+        # Load all enriched results and create a lookup map
+        enriched_prefix = f"processing/{processing_uuid}/enriched/"
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=enriched_prefix
+        )
         
-        # Map state output is already an array of individual Lambda results
-        # No flattening needed - each item is a Lambda response
+        enriched_results_map = {}
+        for obj_info in response.get('Contents', []):
+            obj = s3_client.get_object(Bucket=bucket_name, Key=obj_info['Key'])
+            enriched_data = json.loads(obj['Body'].read().decode('utf-8'))
+            
+            # Use goodreads_id as key, fallback to title+author
+            original_book = enriched_data['original_book']
+            book_key = original_book.get('goodreads_id')
+            if not book_key:
+                book_key = f"{original_book.get('title', '')}-{original_book.get('author', '')}"
+            
+            enriched_results_map[book_key] = enriched_data['enriched_result']
         
-        if not processing_uuid:
-            raise ValueError("No processing_uuid provided")
-        
-        if not original_books:
-            raise ValueError("No original_books provided")
-        
-        if not enriched_results:
-            raise ValueError("No enriched_results provided")
+        if len(enriched_results_map) != len(original_books):
+            raise ValueError(f"Mismatch: {len(original_books)} original books vs {len(enriched_results_map)} enriched results")
         
         logger.info(f"Processing {len(original_books)} books for UUID: {processing_uuid}")
         
         # Merge enriched data back into BookAnalytics objects
-        enhanced_books = merge_enriched_data(original_books, enriched_results)
+        enhanced_books = merge_enriched_data(original_books, enriched_results_map)
         
         if not enhanced_books:
             raise ValueError("No enhanced books created")
         
         # Generate dashboard JSON using existing exporter
         import tempfile
-        import os
-        
-        bucket_name = os.environ['S3_BUCKET_NAME']
         
         # Create JSON locally first
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -238,6 +354,9 @@ def lambda_handler(event, context):
             f"Successfully processed {len(enhanced_books)} books"
         )
         
+        # Clean up processing files
+        cleanup_processing_files(processing_uuid)
+        
         logger.info(f"Successfully completed aggregation for {processing_uuid}")
         
         return {
@@ -251,16 +370,15 @@ def lambda_handler(event, context):
         }
         
     except Exception as e:
-        logger.error(f"Aggregation error: {str(e)}")
+        logger.error(f"Aggregation error for {processing_uuid}: {str(e)}")
         
-        # Update status to error if we have a processing_uuid
-        if 'processing_uuid' in locals():
-            update_processing_status(
-                processing_uuid, 
-                'error', 
-                0, 
-                f"Aggregation failed: {str(e)}"
-            )
+        # Update status to error
+        update_processing_status(
+            processing_uuid, 
+            'error', 
+            0, 
+            f"Aggregation failed: {str(e)}"
+        )
         
         return {
             'statusCode': 500,
@@ -269,3 +387,45 @@ def lambda_handler(event, context):
                 'message': 'Aggregation failed'
             }
         }
+
+
+def process_specific_job(event):
+    """Process aggregation for a specific job (backward compatibility)"""
+    processing_uuid = event.get('processing_uuid')
+    if not processing_uuid:
+        raise ValueError("No processing_uuid provided")
+    
+    return process_job_aggregation(processing_uuid)
+
+
+def cleanup_processing_files(processing_uuid: str):
+    """Clean up intermediate processing files"""
+    try:
+        bucket_name = os.environ['S3_BUCKET_NAME']
+        
+        # Delete enriched results directory
+        enriched_prefix = f"processing/{processing_uuid}/enriched/"
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=enriched_prefix
+        )
+        
+        if 'Contents' in response:
+            delete_keys = [{'Key': obj['Key']} for obj in response['Contents']]
+            s3_client.delete_objects(
+                Bucket=bucket_name,
+                Delete={'Objects': delete_keys}
+            )
+            logger.info(f"Cleaned up {len(delete_keys)} enriched files")
+        
+        # Delete original books file
+        original_books_key = f"processing/{processing_uuid}/original_books.json"
+        try:
+            s3_client.delete_object(Bucket=bucket_name, Key=original_books_key)
+            logger.info(f"Cleaned up original books file")
+        except:
+            pass
+            
+    except Exception as e:
+        logger.error(f"Error cleaning up processing files: {e}")
+        # Don't fail the aggregation due to cleanup errors

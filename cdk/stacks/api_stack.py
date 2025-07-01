@@ -4,8 +4,10 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_iam as iam,
     aws_logs as logs,
-    aws_stepfunctions as sfn,
-    aws_stepfunctions_tasks as tasks,
+    aws_sqs as sqs,
+    aws_lambda_event_sources as lambda_event_sources,
+    aws_events as events,
+    aws_events_targets as targets,
     Duration,
     CfnOutput,
     BundlingOptions
@@ -65,7 +67,27 @@ class ApiStack(Stack):
         )
         storage_stack.data_bucket.grant_read_write(aggregator_role)
         
-        # Orchestrator Lambda role with Step Functions permissions
+        # SQS Queues for book processing
+        # Dead Letter Queue
+        book_processing_dlq = sqs.Queue(
+            self, "BookProcessingDLQ",
+            queue_name=f"goodreads-book-processing-dlq-{deployment_env}",
+            retention_period=Duration.days(14)
+        )
+        
+        # Main processing queue
+        self.book_processing_queue = sqs.Queue(
+            self, "BookProcessingQueue", 
+            queue_name=f"goodreads-book-processing-{deployment_env}",
+            visibility_timeout=Duration.minutes(2),  # 2x Lambda timeout
+            dead_letter_queue=sqs.DeadLetterQueue(
+                max_receive_count=3,
+                queue=book_processing_dlq
+            ),
+            retention_period=Duration.days(1)  # Messages expire after 1 day
+        )
+        
+        # Orchestrator Lambda role with SQS permissions
         orchestrator_role = iam.Role(
             self, "OrchestratorRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -74,6 +96,7 @@ class ApiStack(Stack):
             ]
         )
         storage_stack.data_bucket.grant_read_write(orchestrator_role)
+        self.book_processing_queue.grant_send_messages(orchestrator_role)
         
         # BookProcessor Lambda - Processes individual books
         self.book_processor = _lambda.Function(
@@ -81,12 +104,21 @@ class ApiStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset("lambda_code/book_processor"),
-            timeout=Duration.seconds(30),  # 30-second timeout for single book
+            timeout=Duration.seconds(60),  # Increased timeout for SQS processing
             memory_size=256,  # Lower memory for single book processing
             role=book_processor_role,
             environment=base_env,
             layers=[lambda_layer],
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
+        )
+        
+        # Add SQS event source to BookProcessor
+        self.book_processor.add_event_source(
+            lambda_event_sources.SqsEventSource(
+                self.book_processing_queue,
+                batch_size=1,  # Process one book at a time
+                max_batching_window=Duration.seconds(1)
+            )
         )
         
         # Aggregator Lambda - Combines results and creates final JSON
@@ -106,106 +138,44 @@ class ApiStack(Stack):
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
-        # Step Function State Machine
-        book_processor_task = tasks.LambdaInvoke(
-            self, "ProcessBookTask",
-            lambda_function=self.book_processor,
-            output_path="$.Payload"
+        # CloudWatch Events Rule for aggregator trigger
+        # The aggregator will be triggered periodically to check for completion
+        
+        # Create CloudWatch Events rule to trigger aggregator every 30 seconds
+        aggregator_trigger_rule = events.Rule(
+            self, "AggregatorTriggerRule",
+            description="Triggers aggregator to check for completion",
+            schedule=events.Schedule.rate(Duration.seconds(30))
         )
         
-        # Lambda task to load books from S3
-        load_books_task = tasks.LambdaInvoke(
-            self, "LoadBooksFromS3",
-            lambda_function=self.book_processor,
-            payload=sfn.TaskInput.from_object({
-                "action": "load_books",
-                "bucket.$": "$.bucket", 
-                "books_s3_key.$": "$.books_s3_key",
-                "processing_uuid.$": "$.processing_uuid",
-                "original_books_s3_key.$": "$.original_books_s3_key"
-            }),
-            output_path="$.Payload"
+        # Add aggregator as target
+        aggregator_trigger_rule.add_target(
+            targets.LambdaFunction(self.aggregator)
         )
         
-        map_state = sfn.Map(
-            self, "ProcessAllBooks",
-            max_concurrency=1000,
-            items_path="$.books",
-            parameters={
-                "book.$": "$",
-                "processing_uuid.$": "$$.Execution.Input.processing_uuid",
-                "bucket.$": "$$.Execution.Input.bucket",
-                "original_books_s3_key.$": "$$.Execution.Input.original_books_s3_key"
-            }
-        ).iterator(book_processor_task)
-        
-        aggregator_task = tasks.LambdaInvoke(
-            self, "AggregateResultsTask",
-            lambda_function=self.aggregator,
-            payload=sfn.TaskInput.from_object({
-                "processing_uuid.$": "$$.Execution.Input.processing_uuid",
-                "bucket.$": "$$.Execution.Input.bucket",
-                "original_books_s3_key.$": "$$.Execution.Input.original_books_s3_key",
-                "enriched_results.$": "$"  # Map state output goes here
-            }),
-            output_path="$.Payload"
+        # Grant Events permission to invoke aggregator
+        self.aggregator.add_permission(
+            "AllowCloudWatchEvents",
+            principal=iam.ServicePrincipal("events.amazonaws.com"),
+            source_arn=aggregator_trigger_rule.rule_arn
         )
         
-        # Chain: LoadBooks → Map → Aggregator
-        map_with_error_handling = map_state.add_catch(
-            sfn.Fail(self, "ProcessingFailed", cause="Book processing failed"),
-            errors=[sfn.Errors.ALL]
-        )
-        
-        definition = load_books_task.next(map_with_error_handling).next(aggregator_task)
-        
-        # Step Function execution role
-        step_function_role = iam.Role(
-            self, "StepFunctionRole",
-            assumed_by=iam.ServicePrincipal("states.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaRole")
-            ]
-        )
-        
-        self.state_machine = sfn.StateMachine(
-            self, "BookProcessingStateMachine",
-            definition=definition,
-            role=step_function_role,
-            timeout=Duration.minutes(30),  # 30-minute total timeout
-            comment="Book processing with LoadBooks->Map->Aggregator workflow v4 - fixed Aggregator field mapping",  # Force update
-            logs=sfn.LogOptions(
-                destination=logs.LogGroup(
-                    self, "StepFunctionLogs",
-                    retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
-                ),
-                level=sfn.LogLevel.ALL
-            )
-        )
-        
-        # Grant Step Function permission to invoke Lambda functions
-        self.book_processor.grant_invoke(step_function_role)
-        self.aggregator.grant_invoke(step_function_role)
-        
-        # Orchestrator Lambda (refactored to start Step Function)
+        # Orchestrator Lambda (refactored to use SQS)
         self.orchestrator = _lambda.Function(
             self, "Orchestrator",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler", 
             code=_lambda.Code.from_asset("lambda_code/orchestrator"),
-            timeout=Duration.minutes(5),  # Reduced timeout - just starts Step Function
-            memory_size=512,  # Reduced memory - less processing
+            timeout=Duration.minutes(5),  # Time to process CSV and send SQS messages
+            memory_size=512,  # Memory for CSV processing
             role=orchestrator_role,
             environment={
                 **base_env,
-                "STATE_MACHINE_ARN": self.state_machine.state_machine_arn
+                "BOOK_QUEUE_URL": self.book_processing_queue.queue_url
             },
             layers=[lambda_layer],
             log_retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
-        
-        # Grant orchestrator permission to start Step Function execution
-        self.state_machine.grant_start_execution(orchestrator_role)
 
         # Upload Handler Lambda role  
         upload_role = iam.Role(
@@ -365,7 +335,7 @@ class ApiStack(Stack):
         )
         
         CfnOutput(
-            self, "StateMachineArn",
-            value=self.state_machine.state_machine_arn,
-            description="Step Functions State Machine ARN"
+            self, "BookProcessingQueueUrl",
+            value=self.book_processing_queue.queue_url,
+            description="SQS Queue URL for book processing"
         )

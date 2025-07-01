@@ -74,33 +74,65 @@ async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def lambda_handler(event, context):
     """
-    Lambda handler that either loads books from S3 or processes a single book.
+    Lambda handler that processes books from SQS events.
     
-    For loading books:
+    SQS event format:
     {
-        "action": "load_books",
-        "bucket": "bucket-name",
-        "books_s3_key": "path/to/books.json"
-    }
-    
-    For processing a single book:
-    {
-        "book": {
-            "isbn": "...",
-            "title": "...",
-            "author": "...",
-            ...
-        }
+        "Records": [
+            {
+                "body": "{\"book\": {...}, \"processing_uuid\": \"...\", ...}"
+            }
+        ]
     }
     """
     try:
-        logger.info(f"BookProcessor invoked: {json.dumps(event, default=str)}")
+        logger.info(f"BookProcessor invoked with {len(event.get('Records', []))} records")
         
-        # Check if this is a load_books action
-        if event.get('action') == 'load_books':
-            return load_books_from_s3(event)
+        # Handle SQS event
+        if 'Records' in event:
+            results = []
+            for record in event['Records']:
+                try:
+                    # Parse SQS message body
+                    message_body = json.loads(record['body'])
+                    book_data = message_body.get('book', {})
+                    processing_uuid = message_body.get('processing_uuid')
+                    
+                    if not book_data:
+                        raise ValueError("No book data in SQS message")
+                    
+                    logger.info(f"Processing book: {book_data.get('title', 'Unknown')} for UUID: {processing_uuid}")
+                    
+                    # Process the book
+                    result = asyncio.run(enrich_single_book(book_data))
+                    
+                    # Store enriched result in S3 for aggregator
+                    if processing_uuid and result.get('statusCode') == 200:
+                        store_enriched_result(processing_uuid, book_data, result, message_body)
+                    
+                    results.append(result)
+                    logger.info(f"Successfully processed book: {book_data.get('title', 'Unknown')}")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing SQS record: {e}", exc_info=True)
+                    # Don't fail the entire batch, just log the error
+                    results.append({
+                        'statusCode': 500,
+                        'body': {
+                            'error': str(e),
+                            'final_genres': [],
+                            'genre_enrichment_success': False
+                        }
+                    })
+            
+            return {
+                'statusCode': 200,
+                'processedRecords': len(results),
+                'results': results
+            }
+        
+        # Fallback for direct invocation (backward compatibility)
         else:
-            # Process single book
             book_data = event.get('book', {})
             if not book_data:
                 raise ValueError("No book data provided in event")
@@ -121,26 +153,41 @@ def lambda_handler(event, context):
         }
 
 
-def load_books_from_s3(event):
-    """Load books from S3 and return them for the Map state."""
+def store_enriched_result(processing_uuid: str, book_data: Dict, result: Dict, message_body: Dict):
+    """Store enriched result in S3 for aggregator to collect"""
     import boto3
+    import os
     
     s3_client = boto3.client('s3')
-    bucket = event['bucket']
-    books_s3_key = event['books_s3_key']
+    data_bucket = os.environ.get('DATA_BUCKET')
     
-    logger.info(f"Loading books from s3://{bucket}/{books_s3_key}")
+    if not data_bucket:
+        logger.warning("DATA_BUCKET not set, skipping result storage")
+        return
     
-    # Download books data
-    obj = s3_client.get_object(Bucket=bucket, Key=books_s3_key)
-    books_data = json.loads(obj['Body'].read().decode('utf-8'))
-    
-    logger.info(f"Loaded {len(books_data)} books from S3")
-    
-    # Return books data with other Step Function context for Map state
-    return {
-        'books': books_data,
-        'processing_uuid': event.get('processing_uuid'),
-        'bucket': bucket,
-        'original_books_s3_key': event.get('original_books_s3_key')
-    }
+    try:
+        # Create a unique key for this enriched result
+        book_title = book_data.get('title', 'unknown').replace('/', '_').replace('\\', '_')
+        book_isbn = book_data.get('isbn', book_data.get('isbn13', 'no-isbn'))
+        result_key = f"processing/{processing_uuid}/enriched/{book_isbn}_{book_title[:50]}.json"
+        
+        # Store the enriched result
+        enriched_data = {
+            'original_book': book_data,
+            'enriched_result': result,
+            'processing_uuid': processing_uuid,
+            'timestamp': str(int(__import__('time').time()))
+        }
+        
+        s3_client.put_object(
+            Bucket=data_bucket,
+            Key=result_key,
+            Body=json.dumps(enriched_data),
+            ContentType='application/json'
+        )
+        
+        logger.info(f"Stored enriched result: {result_key}")
+        
+    except Exception as e:
+        logger.error(f"Failed to store enriched result: {e}")
+        # Don't fail the processing, just log the error
