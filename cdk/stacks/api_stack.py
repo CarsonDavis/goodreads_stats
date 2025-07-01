@@ -25,7 +25,7 @@ class ApiStack(Stack):
         lambda_layer = _lambda.LayerVersion(
             self, "SharedLayer",
             code=_lambda.Code.from_asset(
-                "..",
+                "lambda_code/shared",
                 bundling=BundlingOptions(
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
@@ -33,7 +33,7 @@ class ApiStack(Stack):
                         "echo 'Starting Lambda layer bundling...' && "
                         "ls -la . && "
                         "echo 'Installing requirements...' && "
-                        "pip install -r cdk/lambda_code/shared/requirements.txt -t /asset-output/python && "
+                        "pip install -r requirements.txt -t /asset-output/python && "
                         "echo 'Copying genres package...' && "
                         "ls -la genres/ && "
                         "cp -r genres /asset-output/python/ && "
