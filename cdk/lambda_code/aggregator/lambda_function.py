@@ -194,10 +194,30 @@ def lambda_handler(event, context):
         
         # Generate dashboard JSON using existing exporter
         bucket_name = os.environ['S3_BUCKET_NAME']
-        output_path = f"s3://{bucket_name}/data/{processing_uuid}/"
         
-        logger.info(f"Creating dashboard JSON at: {output_path}")
-        create_dashboard_json(enhanced_books, output_path)
+        # Create JSON locally first
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            local_json_path = f.name
+        
+        logger.info(f"Creating dashboard JSON locally at: {local_json_path}")
+        json_file_path = create_dashboard_json(enhanced_books, local_json_path)
+        
+        # Upload to S3
+        s3_key = f"data/{processing_uuid}/dashboard.json"
+        logger.info(f"Uploading dashboard JSON to s3://{bucket_name}/{s3_key}")
+        
+        with open(json_file_path, 'rb') as f:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=f.read(),
+                ContentType='application/json'
+            )
+        
+        # Clean up local file
+        os.unlink(json_file_path)
         
         # Update status to complete
         update_processing_status(
