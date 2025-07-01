@@ -173,6 +173,7 @@ class ApiStack(Stack):
             definition=definition,
             role=step_function_role,
             timeout=Duration.minutes(30),  # 30-minute total timeout
+            comment="Book processing with LoadBooks->Map->Aggregator workflow v2",  # Force update
             logs=sfn.LogOptions(
                 destination=logs.LogGroup(
                     self, "StepFunctionLogs",
