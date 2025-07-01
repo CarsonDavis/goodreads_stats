@@ -29,16 +29,8 @@ class ApiStack(Stack):
                 bundling=BundlingOptions(
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
-                        "bash", "-c",
-                        "echo 'Starting Lambda layer bundling...' && "
-                        "ls -la . && "
-                        "echo 'Installing requirements...' && "
-                        "pip install -r requirements.txt -t /asset-output/python && "
-                        "echo 'Copying genres package...' && "
-                        "ls -la genres/ && "
-                        "cp -r genres /asset-output/python/ && "
-                        "echo 'Verifying layer contents...' && "
-                        "ls -la /asset-output/python/"
+                        "bash", "-c", 
+                        "set -e && echo 'CDK Bundling Started' && ls -la . && echo 'Contents listed' && if [ -d genres ]; then echo 'Genres found'; else echo 'Genres NOT found'; fi && pip install -r requirements.txt -t /asset-output/python && if [ -d genres ]; then cp -r genres /asset-output/python/ && echo 'Genres copied'; else echo 'No genres to copy'; fi && ls -la /asset-output/python/ && echo 'CDK Bundling Complete'"
                     ]
                 )
             ),
