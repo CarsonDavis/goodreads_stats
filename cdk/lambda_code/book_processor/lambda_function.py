@@ -25,8 +25,15 @@ async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
         Dictionary containing enriched book data
     """
     try:
-        # Create BookInfo object from input data
-        book_info = BookInfo(**book_data)
+        # Create BookInfo object from input data - filter to only expected fields
+        book_info_fields = {
+            'title': book_data.get('title'),
+            'author': book_data.get('author'), 
+            'isbn13': book_data.get('isbn13'),
+            'isbn': book_data.get('isbn'),
+            'goodreads_id': book_data.get('goodreads_id')
+        }
+        book_info = BookInfo(**book_info_fields)
         
         # Use existing enricher with concurrency=1 for single book
         async with AsyncGenreEnricher(max_concurrent=1) as enricher:
