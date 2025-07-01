@@ -43,13 +43,13 @@ async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 'statusCode': 200,
                 'body': {
-                    'isbn': enriched_book.isbn,
-                    'title': enriched_book.title,
-                    'author': enriched_book.author,
+                    'isbn': enriched_book.input_info.isbn,
+                    'title': enriched_book.input_info.title,
+                    'author': enriched_book.input_info.author,
                     'final_genres': enriched_book.final_genres,
                     'thumbnail_url': enriched_book.thumbnail_url,
-                    'genre_sources': enriched_book.genre_sources,
-                    'enrichment_logs': enriched_book.enrichment_logs,
+                    'genre_sources': getattr(enriched_book, 'genre_sources', []),
+                    'enrichment_logs': enriched_book.processing_log,
                     'genre_enrichment_success': len(enriched_book.final_genres) > 0
                 }
             }
