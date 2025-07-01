@@ -133,9 +133,9 @@ class ApiStack(Stack):
             items_path="$.books",
             parameters={
                 "book.$": "$",
-                "processing_uuid.$": "$.processing_uuid",
-                "bucket.$": "$.bucket",
-                "original_books_s3_key.$": "$.original_books_s3_key"
+                "processing_uuid.$": "$$.Execution.Input.processing_uuid",
+                "bucket.$": "$$.Execution.Input.bucket",
+                "original_books_s3_key.$": "$$.Execution.Input.original_books_s3_key"
             }
         ).iterator(book_processor_task)
         
@@ -143,9 +143,9 @@ class ApiStack(Stack):
             self, "AggregateResultsTask",
             lambda_function=self.aggregator,
             payload=sfn.TaskInput.from_object({
-                "processing_uuid.$": "$[0].processing_uuid",
-                "bucket.$": "$[0].bucket",
-                "original_books_s3_key.$": "$[0].original_books_s3_key",
+                "processing_uuid.$": "$$.Execution.Input.processing_uuid",
+                "bucket.$": "$$.Execution.Input.bucket",
+                "original_books_s3_key.$": "$$.Execution.Input.original_books_s3_key",
                 "enriched_results.$": "$"  # Map state output goes here
             }),
             output_path="$.Payload"
@@ -173,7 +173,7 @@ class ApiStack(Stack):
             definition=definition,
             role=step_function_role,
             timeout=Duration.minutes(30),  # 30-minute total timeout
-            comment="Book processing with LoadBooks->Map->Aggregator workflow v2",  # Force update
+            comment="Book processing with LoadBooks->Map->Aggregator workflow v3 - fixed Map parameters",  # Force update
             logs=sfn.LogOptions(
                 destination=logs.LogGroup(
                     self, "StepFunctionLogs",
