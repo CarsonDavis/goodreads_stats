@@ -139,7 +139,7 @@ def process_csv_pipeline(processing_uuid: str, bucket: str, csv_key: str):
         books_s3_key = f"processing/{processing_uuid}/books_for_enrichment.json"
         original_books_s3_key = f"processing/{processing_uuid}/original_books.json"
         
-        books_data = [{"book": book_info.__dict__} for book_info in book_infos]
+        books_data = [book_info.__dict__ for book_info in book_infos]
         original_books_data = [book.to_dashboard_dict() for book in books]
         
         # Upload to S3
