@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="darkreader-lock">
     <title> Reading Dashboard</title>
 
     <!-- Tailwind CSS for modern styling -->
@@ -22,6 +23,23 @@
             backdrop-filter: blur(16px) saturate(180%);
             background-color: rgba(31, 41, 55, 0.75);
             border: 1px solid rgba(75, 85, 99, 0.3);
+        }
+        
+        /* Prevent Dark Reader interference */
+        button, .btn, a[class*="bg-"], [class*="bg-gradient"] {
+            filter: none !important;
+        }
+        
+        a[href*="../"] {
+            background-color: rgba(255, 255, 255, 0.2) !important;
+            color: white !important;
+            filter: none !important;
+        }
+        
+        button[class*="bg-red"] {
+            background-color: rgba(239, 68, 68, 0.8) !important;
+            color: white !important;
+            filter: none !important;
         }
     </style>
 </head>

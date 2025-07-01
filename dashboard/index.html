@@ -4,20 +4,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="darkreader-lock">
     <title>📚 Goodreads Stats - Analyze Your Reading Journey</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Prevent Dark Reader from interfering with our dark theme */
+        html[data-darkreader-mode], 
+        html[data-darkreader-scheme] {
+            --darkreader-neutral-background: #111827 !important;
+            --darkreader-neutral-text: #ffffff !important;
+        }
+        
+        /* Force specific elements to ignore Dark Reader */
+        button, .btn, a[class*="bg-"], [class*="bg-gradient"] {
+            filter: none !important;
+        }
+
         .gradient-bg {
-            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%) !important;
+            filter: none !important;
         }
 
         .upload-area {
             transition: all 0.3s ease;
+            filter: none !important;
         }
 
         .upload-area.dragover {
             border-color: #4F46E5;
             background-color: rgba(79, 70, 229, 0.1);
+        }
+        
+        /* Ensure buttons maintain their styling */
+        button[class*="bg-blue"], 
+        a[class*="bg-blue"],
+        button[class*="bg-gradient"],
+        a[class*="bg-gradient"] {
+            filter: none !important;
+        }
+        
+        /* Specific fix for sample dashboard button */
+        a[href*="dashboard?uuid"] {
+            background: linear-gradient(to right, #2563eb, #7c3aed) !important;
+            color: white !important;
+            filter: none !important;
+            -webkit-filter: none !important;
+        }
+        
+        a[href*="dashboard?uuid"]:hover {
+            background: linear-gradient(to right, #1d4ed8, #6d28d9) !important;
+        }
+        
+        /* Fix for upload button */
+        button[class*="bg-blue-600"] {
+            background-color: #2563eb !important;
+            color: white !important;
+            filter: none !important;
+            -webkit-filter: none !important;
+        }
+        
+        button[class*="bg-blue-600"]:hover {
+            background-color: #1d4ed8 !important;
         }
     </style>
 </head>
