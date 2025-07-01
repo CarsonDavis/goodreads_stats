@@ -59,6 +59,8 @@ class BookAnalytics:
     # Enriched genre data (from our pipeline)
     final_genres: List[str] = field(default_factory=list)
     genre_enrichment_success: bool = False
+    genre_sources: List[str] = field(default_factory=list)
+    enrichment_logs: List[str] = field(default_factory=list)
     
     # Image/thumbnail data
     thumbnail_url: Optional[str] = None

@@ -74,6 +74,7 @@ def merge_enriched_data(original_books: List[Dict], enriched_results: List[Dict]
                 book.final_genres = enriched_body.get('final_genres', [])
                 book.genre_enrichment_success = enriched_body.get('genre_enrichment_success', False)
                 book.thumbnail_url = enriched_body.get('thumbnail_url')
+                book.small_thumbnail_url = enriched_body.get('small_thumbnail_url')
                 book.genre_sources = enriched_body.get('genre_sources', [])
                 book.enrichment_logs = enriched_body.get('enrichment_logs', [])
                 
