@@ -56,6 +56,7 @@ class ApiStack(Stack):
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
             ]
         )
+        storage_stack.data_bucket.grant_read_write(book_processor_role)
         
         # Aggregator Lambda role
         aggregator_role = iam.Role(
