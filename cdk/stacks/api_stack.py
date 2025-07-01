@@ -156,11 +156,11 @@ class ApiStack(Stack):
         # CloudWatch Events Rule for aggregator trigger
         # The aggregator will be triggered periodically to check for completion
         
-        # Create CloudWatch Events rule to trigger aggregator every minute
+        # Create CloudWatch Events rule to trigger aggregator every 5 seconds
         aggregator_trigger_rule = events.Rule(
             self, "AggregatorTriggerRule",
             description="Triggers aggregator to check for completion",
-            schedule=events.Schedule.rate(Duration.minutes(1))
+            schedule=events.Schedule.rate(Duration.seconds(5))
         )
         
         # Add aggregator as target
