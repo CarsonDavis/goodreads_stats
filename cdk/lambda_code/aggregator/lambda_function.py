@@ -193,11 +193,12 @@ def lambda_handler(event, context):
             raise ValueError("No enhanced books created")
         
         # Generate dashboard JSON using existing exporter
+        import tempfile
+        import os
+        
         bucket_name = os.environ['S3_BUCKET_NAME']
         
         # Create JSON locally first
-        import tempfile
-        import os
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             local_json_path = f.name
         
