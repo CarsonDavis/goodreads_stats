@@ -115,7 +115,8 @@ def lambda_handler(event, context):
     Expected event format:
     {
         "processing_uuid": "...",
-        "original_books": [...],
+        "bucket": "bucket-name",
+        "original_books_s3_key": "path/to/original_books.json",
         "enriched_results": [...]
     }
     """
@@ -126,7 +127,16 @@ def lambda_handler(event, context):
         
         # Extract data from event
         processing_uuid = event.get('processing_uuid')
-        original_books = event.get('original_books', [])
+        bucket = event.get('bucket')
+        original_books_s3_key = event.get('original_books_s3_key')
+        
+        # Load original books from S3
+        if not bucket or not original_books_s3_key:
+            raise ValueError("Missing bucket or original_books_s3_key")
+            
+        logger.info(f"Loading original books from s3://{bucket}/{original_books_s3_key}")
+        obj = s3_client.get_object(Bucket=bucket, Key=original_books_s3_key)
+        original_books = json.loads(obj['Body'].read().decode('utf-8'))
         
         # Handle Step Functions Map state output format
         # Step Functions Map state returns results as an array of task outputs

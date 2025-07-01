@@ -132,14 +132,38 @@ def process_csv_pipeline(processing_uuid: str, bucket: str, csv_key: str):
             'percent_complete': 20
         }, "Starting genre enrichment")
         
-        # Step 4: Prepare Step Function input
-        logger.info(f"Starting Step Function for {len(book_infos)} books")
+        # Step 4: Store book data in S3 and prepare Step Function input
+        logger.info(f"Storing {len(book_infos)} books in S3 for Step Function processing")
         
-        # Prepare Step Function input
+        # Store book data in S3
+        books_s3_key = f"processing/{processing_uuid}/books_for_enrichment.json"
+        original_books_s3_key = f"processing/{processing_uuid}/original_books.json"
+        
+        books_data = [{"book": book_info.__dict__} for book_info in book_infos]
+        original_books_data = [book.to_dashboard_dict() for book in books]
+        
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=DATA_BUCKET,
+            Key=books_s3_key,
+            Body=json.dumps(books_data),
+            ContentType='application/json'
+        )
+        
+        s3_client.put_object(
+            Bucket=DATA_BUCKET,
+            Key=original_books_s3_key,
+            Body=json.dumps(original_books_data),
+            ContentType='application/json'
+        )
+        
+        # Prepare Step Function input with S3 references
         step_function_input = {
             "processing_uuid": processing_uuid,
-            "books": [{"book": book_info.__dict__} for book_info in book_infos],
-            "original_books": [book.to_dashboard_dict() for book in books]
+            "bucket": DATA_BUCKET,
+            "books_s3_key": books_s3_key,
+            "original_books_s3_key": original_books_s3_key,
+            "total_books": len(book_infos)
         }
         
         # Update status

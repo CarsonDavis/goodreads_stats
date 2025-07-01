@@ -67,9 +67,16 @@ async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def lambda_handler(event, context):
     """
-    Lambda handler for processing a single book.
+    Lambda handler that either loads books from S3 or processes a single book.
     
-    Expected event format:
+    For loading books:
+    {
+        "action": "load_books",
+        "bucket": "bucket-name",
+        "books_s3_key": "path/to/books.json"
+    }
+    
+    For processing a single book:
     {
         "book": {
             "isbn": "...",
@@ -80,21 +87,23 @@ def lambda_handler(event, context):
     }
     """
     try:
-        logger.info(f"Processing book: {event.get('book', {}).get('title', 'Unknown')}")
+        logger.info(f"BookProcessor invoked: {json.dumps(event, default=str)}")
         
-        # Extract book data from event
-        book_data = event.get('book', {})
-        if not book_data:
-            raise ValueError("No book data provided in event")
-        
-        # Run async enrichment
-        result = asyncio.run(enrich_single_book(book_data))
-        
-        logger.info(f"Successfully processed book: {book_data.get('title', 'Unknown')}")
-        return result
+        # Check if this is a load_books action
+        if event.get('action') == 'load_books':
+            return load_books_from_s3(event)
+        else:
+            # Process single book
+            book_data = event.get('book', {})
+            if not book_data:
+                raise ValueError("No book data provided in event")
+            
+            result = asyncio.run(enrich_single_book(book_data))
+            logger.info(f"Successfully processed book: {book_data.get('title', 'Unknown')}")
+            return result
         
     except Exception as e:
-        logger.error(f"Lambda handler error: {str(e)}")
+        logger.error(f"BookProcessor failed: {e}", exc_info=True)
         return {
             'statusCode': 500,
             'body': {
@@ -103,3 +112,28 @@ def lambda_handler(event, context):
                 'genre_enrichment_success': False
             }
         }
+
+
+def load_books_from_s3(event):
+    """Load books from S3 and return them for the Map state."""
+    import boto3
+    
+    s3_client = boto3.client('s3')
+    bucket = event['bucket']
+    books_s3_key = event['books_s3_key']
+    
+    logger.info(f"Loading books from s3://{bucket}/{books_s3_key}")
+    
+    # Download books data
+    obj = s3_client.get_object(Bucket=bucket, Key=books_s3_key)
+    books_data = json.loads(obj['Body'].read().decode('utf-8'))
+    
+    logger.info(f"Loaded {len(books_data)} books from S3")
+    
+    # Return books data with other Step Function context
+    return {
+        'books': books_data,
+        'processing_uuid': event.get('processing_uuid'),
+        'bucket': bucket,
+        'original_books_s3_key': event.get('original_books_s3_key')
+    }

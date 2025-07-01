@@ -113,6 +113,18 @@ class ApiStack(Stack):
             output_path="$.Payload"
         )
         
+        # Lambda task to load books from S3
+        load_books_task = tasks.LambdaInvoke(
+            self, "LoadBooksFromS3",
+            lambda_function=self.book_processor,
+            payload=sfn.TaskInput.from_object({
+                "action": "load_books",
+                "bucket.$": "$.bucket", 
+                "books_s3_key.$": "$.books_s3_key"
+            }),
+            output_path="$.Payload"
+        )
+        
         map_state = sfn.Map(
             self, "ProcessAllBooks",
             max_concurrency=1000,
@@ -127,16 +139,19 @@ class ApiStack(Stack):
             lambda_function=self.aggregator,
             payload=sfn.TaskInput.from_object({
                 "processing_uuid.$": "$.processing_uuid",
-                "original_books.$": "$.original_books",
+                "bucket.$": "$.bucket",
+                "original_books_s3_key.$": "$.original_books_s3_key",
                 "enriched_results.$": "$"  # Map state output goes here
             }),
             output_path="$.Payload"
         )
         
-        definition = map_state.add_catch(
-            sfn.Fail(self, "ProcessingFailed", cause="Book processing failed"),
-            errors=[sfn.Errors.ALL]
-        ).next(aggregator_task)
+        definition = load_books_task.next(
+            map_state.add_catch(
+                sfn.Fail(self, "ProcessingFailed", cause="Book processing failed"),
+                errors=[sfn.Errors.ALL]
+            ).next(aggregator_task)
+        )
         
         # Step Function execution role
         step_function_role = iam.Role(
