@@ -33,6 +33,12 @@ class ReadingDashboard {
         const cancelDelete = document.getElementById('cancelDelete');
         const confirmDelete = document.getElementById('confirmDelete');
 
+        // Hide delete button for default/example UUID
+        const defaultUuid = '759f8950-6946-4101-9c16-2aafc54d672d';
+        if (this.uuid === defaultUuid) {
+            deleteButton?.style.setProperty('display', 'none');
+        }
+
         deleteButton?.addEventListener('click', () => {
             this.showDeleteModal();
         });
