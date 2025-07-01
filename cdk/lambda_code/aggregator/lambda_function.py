@@ -33,8 +33,38 @@ def merge_enriched_data(original_books: List[Dict], enriched_results: List[Dict]
     
     for original_book, enriched_result in zip(original_books, enriched_results):
         try:
-            # Create BookAnalytics object from original data
-            book = BookAnalytics(**original_book)
+            # Filter out computed properties that aren't constructor parameters
+            filtered_book_data = {k: v for k, v in original_book.items() 
+                                if k not in ['reading_year', 'reading_month_year', 'is_rated', 
+                                           'page_category', 'has_review', 'was_reread']}
+            
+            # Map field names to match BookAnalytics constructor
+            field_mappings = {
+                'genres': 'final_genres',
+                'publication_year': 'original_publication_year', 
+                'genre_enriched': 'genre_enrichment_success',
+                'original_read_count': 'read_count_original'
+            }
+            
+            for old_name, new_name in field_mappings.items():
+                if old_name in filtered_book_data:
+                    filtered_book_data[new_name] = filtered_book_data.pop(old_name)
+            
+            # Convert date strings to date objects
+            from datetime import datetime
+            if 'date_read' in filtered_book_data and filtered_book_data['date_read']:
+                filtered_book_data['date_read'] = datetime.fromisoformat(filtered_book_data['date_read']).date()
+            
+            # Provide defaults for missing constructor fields not in dashboard dict
+            filtered_book_data.setdefault('author_lf', None)
+            filtered_book_data.setdefault('additional_authors', None)
+            filtered_book_data.setdefault('year_published', None)
+            filtered_book_data.setdefault('date_added', None)
+            filtered_book_data.setdefault('bookshelves_with_positions', None)
+            filtered_book_data.setdefault('owned_copies', 0)
+            
+            # Create BookAnalytics object from filtered data
+            book = BookAnalytics(**filtered_book_data)
             
             # Apply enrichment if successful
             if enriched_result.get('statusCode') == 200:
