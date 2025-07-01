@@ -151,11 +151,12 @@ class ApiStack(Stack):
             output_path="$.Payload"
         )
         
-        definition = load_books_task.next(
-            map_state.add_catch(
-                sfn.Fail(self, "ProcessingFailed", cause="Book processing failed"),
-                errors=[sfn.Errors.ALL]
-            ).next(aggregator_task)
+        # Chain: LoadBooks → Map → Aggregator
+        workflow = load_books_task.next(map_state).next(aggregator_task)
+        
+        definition = workflow.add_catch(
+            sfn.Fail(self, "ProcessingFailed", cause="Book processing failed"),
+            errors=[sfn.Errors.ALL]
         )
         
         # Step Function execution role
