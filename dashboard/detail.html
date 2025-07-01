@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            darkMode: 'class',
             plugins: [
                 // Add typography plugin for better prose styling
                 function({ addUtilities }) {
@@ -23,13 +22,10 @@
                             'font-weight': '600'
                         },
                         '.prose blockquote': {
-                            'border-left': '4px solid #d1d5db',
+                            'border-left': '4px solid #6b7280',
                             'padding-left': '1rem',
                             'font-style': 'italic',
                             'margin': '1rem 0'
-                        },
-                        '.dark .prose blockquote': {
-                            'border-left-color': '#6b7280'
                         }
                     })
                 }
@@ -37,17 +33,17 @@
         }
     </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+<body class="bg-gray-900 transition-colors duration-200">
     <div class="min-h-screen">
-        <header class="bg-white dark:bg-gray-800 shadow-sm">
+        <header class="bg-gray-800 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center py-6">
                     <div>
-                        <h1 id="book-title" class="text-3xl font-bold text-gray-900 dark:text-white">Book Details</h1>
-                        <p id="book-author" class="text-gray-600 dark:text-gray-400 mt-1"></p>
+                        <h1 id="book-title" class="text-3xl font-bold text-white">Book Details</h1>
+                        <p id="book-author" class="text-gray-400 mt-1"></p>
                     </div>
                     <div class="flex space-x-4">
-                        <a id="back-button" href="#" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium">
+                        <a id="back-button" href="#" class="text-blue-400 hover:text-blue-300 font-medium">
                             ← Back
                         </a>
                     </div>
@@ -56,13 +52,13 @@
         </header>
 
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div id="book-details" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div id="book-details" class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
                 <!-- Book details will be populated here -->
             </div>
             
             <div id="loading" class="text-center py-8">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p class="text-gray-600 dark:text-gray-400 mt-2">Loading book details...</p>
+                <p class="text-gray-400 mt-2">Loading book details...</p>
             </div>
         </main>
     </div>

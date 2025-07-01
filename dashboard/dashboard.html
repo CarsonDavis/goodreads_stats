@@ -15,23 +15,18 @@
     <!-- Custom styles -->
     <style>
         .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
         }
 
         .card {
             backdrop-filter: blur(16px) saturate(180%);
-            background-color: rgba(255, 255, 255, 0.75);
-            border: 1px solid rgba(209, 213, 219, 0.3);
-        }
-
-        .dark .card {
-            background-color: rgba(17, 24, 39, 0.75);
+            background-color: rgba(31, 41, 55, 0.75);
             border: 1px solid rgba(75, 85, 99, 0.3);
         }
     </style>
 </head>
 
-<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+<body class="bg-gray-900 transition-colors duration-300">
     <!-- Header -->
     <header class="gradient-bg text-white py-8 mb-8">
         <div class="container mx-auto px-6">
@@ -49,10 +44,6 @@
                         class="p-2 px-4 rounded-lg bg-red-500 bg-opacity-80 hover:bg-opacity-100 transition-all text-white font-medium">
                         ️ Delete My Data
                     </button>
-                    <button id="darkModeToggle"
-                        class="p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all">
-                        
-                    </button>
                 </div>
             </div>
         </div>
@@ -62,7 +53,7 @@
     <div id="loading" class="container mx-auto px-6 text-center py-20">
         <div class="animate-pulse">
             <div class="text-6xl mb-4"></div>
-            <div class="text-xl text-gray-600 dark:text-gray-300">Loading your reading data...</div>
+            <div class="text-xl text-gray-300">Loading your reading data...</div>
         </div>
     </div>
 
@@ -74,8 +65,8 @@
             <div class="card rounded-xl p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Total Books Read</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="totalBooks">-</p>
+                        <p class="text-sm font-medium text-gray-300">Total Books Read</p>
+                        <p class="text-3xl font-bold text-white" id="totalBooks">-</p>
                     </div>
                     <div class="text-3xl"></div>
                 </div>
@@ -84,8 +75,8 @@
             <div class="card rounded-xl p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pages</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="totalPages">-</p>
+                        <p class="text-sm font-medium text-gray-300">Total Pages</p>
+                        <p class="text-3xl font-bold text-white" id="totalPages">-</p>
                     </div>
                     <div class="text-3xl"></div>
                 </div>
@@ -94,8 +85,8 @@
             <div class="card rounded-xl p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Average Rating</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="avgRating">-</p>
+                        <p class="text-sm font-medium text-gray-300">Average Rating</p>
+                        <p class="text-3xl font-bold text-white" id="avgRating">-</p>
                     </div>
                     <div class="text-3xl">⭐</div>
                 </div>
@@ -104,8 +95,8 @@
             <div class="card rounded-xl p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Reading Years</p>
-                        <p class="text-3xl font-bold text-gray-900 dark:text-white" id="readingYears">-</p>
+                        <p class="text-sm font-medium text-gray-300">Reading Years</p>
+                        <p class="text-3xl font-bold text-white" id="readingYears">-</p>
                     </div>
                     <div class="text-3xl"></div>
                 </div>
@@ -117,7 +108,7 @@
 
             <!-- Books by Year Chart -->
             <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white"> Books Read by Year</h3>
+                <h3 class="text-xl font-semibold mb-4 text-white"> Books Read by Year</h3>
                 <div class="relative h-80">
                     <canvas id="booksByYearChart"></canvas>
                 </div>
@@ -125,7 +116,7 @@
 
             <!-- Rating Distribution -->
             <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">⭐ Rating Distribution</h3>
+                <h3 class="text-xl font-semibold mb-4 text-white">⭐ Rating Distribution</h3>
                 <div class="relative h-80">
                     <canvas id="ratingChart"></canvas>
                 </div>
@@ -137,7 +128,7 @@
 
             <!-- Top Genres -->
             <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">️ Top Genres</h3>
+                <h3 class="text-xl font-semibold mb-4 text-white">️ Top Genres</h3>
                 <div class="relative h-80">
                     <canvas id="genresChart"></canvas>
                 </div>
@@ -145,7 +136,7 @@
 
             <!-- Pages Timeline -->
             <div class="card rounded-xl p-6">
-                <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white"> Pages Read by Year</h3>
+                <h3 class="text-xl font-semibold mb-4 text-white"> Pages Read by Year</h3>
                 <div class="relative h-80">
                     <canvas id="pagesChart"></canvas>
                 </div>
@@ -154,16 +145,16 @@
 
         <!-- Recent Books Table -->
         <div class="card rounded-xl p-6">
-            <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white"> Recent Books</h3>
+            <h3 class="text-xl font-semibold mb-4 text-white"> Recent Books</h3>
             <div class="overflow-x-auto">
                 <table class="min-w-full">
                     <thead>
-                        <tr class="border-b border-gray-200 dark:border-gray-700">
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Title</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Author</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Date</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Rating</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Pages</th>
+                        <tr class="border-b border-gray-700">
+                            <th class="text-left py-3 px-4 font-semibold text-white">Title</th>
+                            <th class="text-left py-3 px-4 font-semibold text-white">Author</th>
+                            <th class="text-left py-3 px-4 font-semibold text-white">Date</th>
+                            <th class="text-left py-3 px-4 font-semibold text-white">Rating</th>
+                            <th class="text-left py-3 px-4 font-semibold text-white">Pages</th>
                         </tr>
                     </thead>
                     <tbody id="recentBooksTable">
@@ -177,10 +168,10 @@
     <!-- Error State -->
     <div id="error" class="container mx-auto px-6 text-center py-20 hidden">
         <div class="text-6xl mb-4"></div>
-        <div class="text-xl text-gray-600 dark:text-gray-300 mb-4">Dashboard data not found</div>
-        <div class="text-gray-500 dark:text-gray-400 mb-6">
+        <div class="text-xl text-gray-300 mb-4">Dashboard data not found</div>
+        <div class="text-gray-400 mb-6">
             <div class="mb-2">Make sure you include a UUID in the URL:</div>
-            <div class="font-mono bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+            <div class="font-mono bg-gray-800 p-3 rounded-lg text-sm">
                 <div>✅ /dashboard/?uuid=759f8950-6946-4101-9c16-2aafc54d672d</div>
                 <div>✅ /dashboard/#759f8950-6946-4101-9c16-2aafc54d672d</div>
             </div>
@@ -192,18 +183,18 @@
 
     <!-- Delete Confirmation Modal -->
     <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
             <div class="p-6">
                 <div class="flex items-center mb-4">
                     <div class="text-red-500 text-3xl mr-3">⚠️</div>
-                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Delete Your Data?</h3>
+                    <h3 class="text-xl font-bold text-white">Delete Your Data?</h3>
                 </div>
-                <p class="text-gray-600 dark:text-gray-300 mb-6">
+                <p class="text-gray-300 mb-6">
                     This will permanently delete all your processed reading data. This action cannot be undone.
                 </p>
                 <div class="flex space-x-3">
                     <button id="cancelDelete"
-                        class="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors">
+                        class="flex-1 px-4 py-2 bg-gray-600 text-gray-200 rounded-lg hover:bg-gray-500 transition-colors">
                         Cancel
                     </button>
                     <button id="confirmDelete"

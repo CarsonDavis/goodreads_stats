@@ -20,19 +20,10 @@ class ReadingDashboard {
     }
 
     setupDarkMode() {
+        // Always enable dark mode since we only support dark theme
         const html = document.documentElement;
-        if (this.isDarkMode) {
-            html.classList.add('dark');
-        }
-        
-        document.getElementById('darkModeToggle').addEventListener('click', () => {
-            this.isDarkMode = !this.isDarkMode;
-            localStorage.setItem('darkMode', this.isDarkMode);
-            html.classList.toggle('dark');
-            
-            // Update chart colors for dark mode
-            this.updateChartsForTheme();
-        });
+        html.classList.add('dark');
+        this.isDarkMode = true;
     }
 
     setupEventListeners() {
@@ -374,22 +365,22 @@ class ReadingDashboard {
 
         recentBooks.forEach(book => {
             const row = document.createElement('tr');
-            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800';
+            row.className = 'border-b border-gray-700 hover:bg-gray-800';
             
             row.innerHTML = `
-                <td class="py-3 px-4 text-gray-900 dark:text-white font-medium">
+                <td class="py-3 px-4 text-white font-medium">
                     ${this.truncateText(book.title, 40)}
                 </td>
-                <td class="py-3 px-4 text-gray-600 dark:text-gray-300">
+                <td class="py-3 px-4 text-gray-300">
                     ${this.truncateText(book.author, 25)}
                 </td>
-                <td class="py-3 px-4 text-gray-600 dark:text-gray-300">
+                <td class="py-3 px-4 text-gray-300">
                     ${this.formatDate(book.date_read)}
                 </td>
                 <td class="py-3 px-4">
                     ${book.my_rating ? '⭐'.repeat(book.my_rating) : '-'}
                 </td>
-                <td class="py-3 px-4 text-gray-600 dark:text-gray-300">
+                <td class="py-3 px-4 text-gray-300">
                     ${book.num_pages ? book.num_pages.toLocaleString() : '-'}
                 </td>
             `;
@@ -405,25 +396,25 @@ class ReadingDashboard {
             plugins: {
                 legend: {
                     labels: {
-                        color: this.isDarkMode ? '#d1d5db' : '#374151'
+                        color: '#d1d5db'
                     }
                 }
             },
             scales: {
                 x: {
                     grid: {
-                        color: this.isDarkMode ? 'rgba(75, 85, 99, 0.3)' : 'rgba(209, 213, 219, 0.3)'
+                        color: 'rgba(75, 85, 99, 0.3)'
                     },
                     ticks: {
-                        color: this.isDarkMode ? '#d1d5db' : '#374151'
+                        color: '#d1d5db'
                     }
                 },
                 y: {
                     grid: {
-                        color: this.isDarkMode ? 'rgba(75, 85, 99, 0.3)' : 'rgba(209, 213, 219, 0.3)'
+                        color: 'rgba(75, 85, 99, 0.3)'
                     },
                     ticks: {
-                        color: this.isDarkMode ? '#d1d5db' : '#374151'
+                        color: '#d1d5db'
                     }
                 }
             }

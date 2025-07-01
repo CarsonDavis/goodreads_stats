@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
         }
 
         .upload-area {
@@ -22,7 +22,7 @@
     </style>
 </head>
 
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-900 min-h-screen">
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
         <header class="gradient-bg text-white py-16">
@@ -40,64 +40,64 @@
 
                 <!-- Project Description -->
                 <div class="text-center mb-12">
-                    <h2 class="text-3xl font-semibold text-gray-800 mb-6">Analyze Your Reading Journey</h2>
+                    <h2 class="text-3xl font-semibold text-white mb-6">Analyze Your Reading Journey</h2>
                     <div class="grid md:grid-cols-3 gap-8 mb-8">
                         <div class="text-center">
                             <div class="text-4xl mb-4">📊</div>
-                            <h3 class="font-semibold text-lg mb-2">Rich Analytics</h3>
-                            <p class="text-gray-600">View reading trends, genre preferences, and rating patterns over
+                            <h3 class="font-semibold text-lg mb-2 text-white">Rich Analytics</h3>
+                            <p class="text-gray-300">View reading trends, genre preferences, and rating patterns over
                                 time</p>
                         </div>
                         <div class="text-center">
                             <div class="text-4xl mb-4">📖</div>
-                            <h3 class="font-semibold text-lg mb-2">Book Details</h3>
-                            <p class="text-gray-600">Explore individual books with covers, descriptions, and your
+                            <h3 class="font-semibold text-lg mb-2 text-white">Book Details</h3>
+                            <p class="text-gray-300">Explore individual books with covers, descriptions, and your
                                 personal notes</p>
                         </div>
                         <div class="text-center">
                             <div class="text-4xl mb-4">🎯</div>
-                            <h3 class="font-semibold text-lg mb-2">Smart Filtering</h3>
-                            <p class="text-gray-600">Filter by genre, rating, year, or any combination to find specific
+                            <h3 class="font-semibold text-lg mb-2 text-white">Smart Filtering</h3>
+                            <p class="text-gray-300">Filter by genre, rating, year, or any combination to find specific
                                 books</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Sample Dashboard Link -->
-                <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl shadow-lg p-8 mb-8 text-center border border-purple-100">
+                <div class="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl shadow-lg p-8 mb-8 text-center border border-gray-600">
                     <div class="text-4xl mb-4">🌟</div>
-                    <h3 class="text-2xl font-semibold text-gray-800 mb-4">See It In Action</h3>
-                    <p class="text-gray-600 mb-6">
+                    <h3 class="text-2xl font-semibold text-white mb-4">See It In Action</h3>
+                    <p class="text-gray-300 mb-6">
                         Explore a sample dashboard with real reading data to see what insights you can discover
                     </p>
                     <a href="dashboard?uuid=759f8950-6946-4101-9c16-2aafc54d672d"
-                        class="inline-flex items-center bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                        class="inline-flex items-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
                         👀 View Sample Dashboard
                     </a>
                 </div>
 
                 <!-- Upload Section -->
-                <div class="bg-white rounded-xl shadow-lg p-8 mb-8">
-                    <h3 class="text-2xl font-semibold text-gray-800 mb-6 text-center">Get Started</h3>
+                <div class="bg-gray-800 rounded-xl shadow-lg p-8 mb-8 border border-gray-700">
+                    <h3 class="text-2xl font-semibold text-white mb-6 text-center">Get Started</h3>
 
                     <!-- Instructions -->
                     <div class="mb-6 text-center">
-                        <p class="text-gray-600 mb-4">
+                        <p class="text-gray-300 mb-4">
                             Upload your Goodreads library export to generate your personalized dashboard
                         </p>
                         <a href="https://www.goodreads.com/review/import" target="_blank"
-                            class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium">
+                            class="inline-flex items-center text-blue-400 hover:text-blue-300 font-medium">
                             📄 Export your Goodreads library →
                         </a>
                     </div>
 
                     <!-- Upload Area -->
                     <div id="upload-area"
-                        class="upload-area border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-gray-400 transition-colors">
+                        class="upload-area border-2 border-dashed border-gray-600 rounded-lg p-12 text-center cursor-pointer hover:border-gray-500 transition-colors bg-gray-900">
                         <div id="upload-content">
                             <div class="text-5xl mb-4">📁</div>
-                            <p class="text-xl font-medium text-gray-700 mb-2">Drop your CSV file here</p>
-                            <p class="text-gray-500 mb-4">or click to browse</p>
+                            <p class="text-xl font-medium text-white mb-2">Drop your CSV file here</p>
+                            <p class="text-gray-400 mb-4">or click to browse</p>
                             <button
                                 class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
                                 Choose File
@@ -107,27 +107,27 @@
                         <!-- Processing State -->
                         <div id="processing-content" class="hidden">
                             <div class="text-5xl mb-4">⚙️</div>
-                            <p class="text-xl font-medium text-gray-700 mb-2">Processing your library...</p>
+                            <p class="text-xl font-medium text-white mb-2">Processing your library...</p>
                             <div class="w-64 bg-gray-200 rounded-full h-3 mx-auto">
-                                <div id="progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                                <div id="progress-bar" class="bg-blue-500 h-3 rounded-full transition-all duration-300"
                                     style="width: 0%"></div>
                             </div>
-                            <p id="progress-text" class="text-gray-500 mt-2">Starting analysis...</p>
+                            <p id="progress-text" class="text-gray-400 mt-2">Starting analysis...</p>
                         </div>
                     </div>
 
                     <input type="file" id="file-input" accept=".csv" class="hidden">
 
                     <!-- Error Display -->
-                    <div id="error-display" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <p class="text-red-700" id="error-message"></p>
+                    <div id="error-display" class="hidden mt-4 p-4 bg-red-900 border border-red-700 rounded-lg">
+                        <p class="text-red-300" id="error-message"></p>
                     </div>
                 </div>
             </div>
         </main>
 
         <!-- Footer -->
-        <footer class="bg-gray-800 text-white py-8">
+        <footer class="bg-black text-white py-8">
             <div class="container mx-auto px-6 text-center">
                 <p class="opacity-75">
                     Built with ❤️ for book lovers • Your data stays private and is processed locally
