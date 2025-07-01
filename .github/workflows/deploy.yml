@@ -70,6 +70,10 @@ jobs:
           # Create shared directory and copy the genres directory
           mkdir -p cdk/lambda_code/shared/
           cp -r genres cdk/lambda_code/shared/
+          echo "Genres directory copied to:"
+          ls -la cdk/lambda_code/shared/
+          echo "Genres contents:"
+          ls -la cdk/lambda_code/shared/genres/
           
       - name: Deploy CDK stacks
         id: deploy-cdk

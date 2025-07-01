@@ -10,8 +10,8 @@ logger.setLevel(logging.INFO)
 # Import existing enrichment functionality
 import sys
 sys.path.append('/opt/python')
-from genres.enrichment.book_pipeline import BookInfo
-from genres.enrichment.async_genre_enricher import AsyncGenreEnricher
+from genres.models.book import BookInfo
+from genres.pipeline.enricher import AsyncGenreEnricher
 
 
 async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:

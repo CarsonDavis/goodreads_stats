@@ -11,8 +11,8 @@ logger.setLevel(logging.INFO)
 # Import existing analytics and export functionality
 import sys
 sys.path.append('/opt/python')
-from genres.analytics.book_analytics import BookAnalytics
-from genres.export.dashboard_json_exporter import create_dashboard_json
+from genres.models.analytics import BookAnalytics
+from genres.pipeline.exporter import create_dashboard_json
 
 # Initialize S3 client
 s3_client = boto3.client('s3')

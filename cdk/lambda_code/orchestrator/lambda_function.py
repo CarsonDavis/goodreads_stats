@@ -7,11 +7,11 @@ from typing import List, Dict, Any
 import sys
 
 # Add the shared layer to Python path
-sys.path.append('/opt')
+sys.path.append('/opt/python')
 
 # Import our existing pipeline components
 from genres.pipeline.csv_loader import AnalyticsCSVProcessor
-from genres.models.book_analytics import BookInfo
+from genres.models.book import BookInfo
 
 # Configure logging
 logger = logging.getLogger()
