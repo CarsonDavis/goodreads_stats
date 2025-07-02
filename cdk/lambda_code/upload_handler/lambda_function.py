@@ -121,7 +121,7 @@ def lambda_handler(event, context):
                       boundary=boundary[:20],
                       body_type=type(body).__name__,
                       body_size=len(body),
-                      body_starts_with=body[:50] if len(body) > 50 else body)
+                      body_starts_with=str(body[:50]) if len(body) > 50 else str(body))
         
         csv_data = parse_multipart_csv(body, boundary)
         if not csv_data:
