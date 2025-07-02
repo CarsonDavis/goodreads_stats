@@ -190,11 +190,19 @@ class ApiStack(Stack):
             log_group=upload_handler_log_group,
         )
 
-        # API Gateway
+        # API Gateway with comprehensive logging
         domain_name = (
             f"goodreads-stats.codebycarson.com"
             if deployment_env == "prod"
             else f"dev.goodreads-stats.codebycarson.com"
+        )
+
+        # API Gateway access log group
+        api_log_group = logs.LogGroup(
+            self,
+            "ApiAccessLogs",
+            log_group_name=f"/aws/apigateway/goodreads-stats-{deployment_env}",
+            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
 
         self.api = apigateway.RestApi(
@@ -217,9 +225,31 @@ class ApiStack(Stack):
                     "Authorization",
                     "X-Amz-Date",
                     "X-Api-Key",
+                    "X-Correlation-ID",
                 ],
                 max_age=Duration.hours(1),
             ),
+            deploy_options=apigateway.StageOptions(
+                access_log_destination=apigateway.LogGroupLogDestination(api_log_group),
+                access_log_format=apigateway.AccessLogFormat.json_with_standard_fields(
+                    caller=True,
+                    http_method=True,
+                    ip=True,
+                    protocol=True,
+                    request_time=True,
+                    resource_path=True,
+                    response_length=True,
+                    status=True,
+                    user=True,
+                    request_id=True,
+                    extended_request_id=True,
+                    error_message=True,
+                    error_message_string=True
+                ),
+                tracing_enabled=True,  # Enable X-Ray tracing
+                data_trace_enabled=True,  # Log request/response data
+                logging_level=apigateway.MethodLoggingLevel.INFO
+            )
         )
 
         # Create request validator after API is created
@@ -243,9 +273,74 @@ class ApiStack(Stack):
         upload_resource = api_resource.add_resource("upload")
         upload_resource.add_method("POST", upload_integration)
 
-        # GET /api/data/{job_id} - returns dashboard JSON
-        # This will be handled by a simple S3 proxy or direct S3 access
-        # For now, we'll leave this as a placeholder for future implementation
+        # GET /api/data/{job_id} - returns dashboard JSON from S3
+        data_resource = api_resource.add_resource("data")
+        data_job_resource = data_resource.add_resource("{job_id}")
+        
+        # Create a simple Lambda function to proxy S3 access
+        data_handler_role = iam.Role(
+            self, "DataHandlerRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        storage_stack.data_bucket.grant_read(data_handler_role)
+        
+        # Simple data handler Lambda
+        data_handler = _lambda.Function(
+            self, "DataHandler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="index.lambda_handler",
+            code=_lambda.Code.from_inline(f"""
+import json
+import boto3
+
+s3_client = boto3.client('s3')
+DATA_BUCKET = '{storage_stack.data_bucket.bucket_name}'
+
+def lambda_handler(event, context):
+    try:
+        job_id = event['pathParameters']['job_id']
+        key = f"data/{{job_id}}.json"
+        
+        response = s3_client.get_object(Bucket=DATA_BUCKET, Key=key)
+        dashboard_data = response['Body'].read().decode('utf-8')
+        
+        return {{
+            'statusCode': 200,
+            'headers': {{
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }},
+            'body': dashboard_data
+        }}
+    except s3_client.exceptions.NoSuchKey:
+        return {{
+            'statusCode': 404,
+            'headers': {{
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }},
+            'body': json.dumps({{'error': 'Dashboard data not found'}})
+        }}
+    except Exception as e:
+        return {{
+            'statusCode': 500,
+            'headers': {{
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }},
+            'body': json.dumps({{'error': str(e)}})
+        }}
+"""),
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            role=data_handler_role
+        )
+        
+        data_integration = apigateway.LambdaIntegration(data_handler)
+        data_job_resource.add_method("GET", data_integration)
 
         # Grant upload handler permission to invoke orchestrator
         self.orchestrator.grant_invoke(self.upload_handler)
