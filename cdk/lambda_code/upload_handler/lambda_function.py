@@ -56,12 +56,25 @@ def lambda_handler(event, context):
     correlation_id = event.get('headers', {}).get('X-Correlation-ID') or str(uuid.uuid4())
     start_time = time.time()
     
+    # Log full event structure for debugging (sanitized)
+    debug_event = {
+        'httpMethod': event.get('httpMethod'),
+        'path': event.get('path'),
+        'queryStringParameters': event.get('queryStringParameters'),
+        'headers': event.get('headers', {}),
+        'isBase64Encoded': event.get('isBase64Encoded'),
+        'body_length': len(event.get('body', '')),
+        'body_preview': event.get('body', '')[:100] if event.get('body') else None,
+        'requestContext': {
+            'requestId': event.get('requestContext', {}).get('requestId'),
+            'identity': event.get('requestContext', {}).get('identity', {})
+        }
+    }
+    
     log_structured("INFO", "Upload handler invoked", correlation_id,
                   request_id=context.aws_request_id,
                   function_name=context.function_name,
-                  http_method=event.get('httpMethod'),
-                  source_ip=event.get('requestContext', {}).get('identity', {}).get('sourceIp'),
-                  user_agent=event.get('headers', {}).get('User-Agent'))
+                  debug_event=debug_event)
     
     try:
         # Parse the API Gateway event
@@ -76,10 +89,15 @@ def lambda_handler(event, context):
         else:
             body = event['body'].encode() if isinstance(event['body'], str) else event['body']
         
-        # Parse multipart form data
-        content_type = event.get('headers', {}).get('content-type', '')
+        # Parse multipart form data - check all possible header cases
+        headers = event.get('headers', {})
+        content_type = (headers.get('content-type', '') or 
+                       headers.get('Content-Type', '') or 
+                       headers.get('CONTENT-TYPE', ''))
+        
         log_structured("DEBUG", "Parsing multipart form data", correlation_id, 
-                      content_type=content_type[:100])  # Truncate for logging
+                      content_type=content_type[:100],  # Truncate for logging
+                      all_headers=list(headers.keys())[:10])  # Show available headers
         
         if 'multipart/form-data' not in content_type:
             log_structured("ERROR", "Invalid content type", correlation_id, content_type=content_type)
@@ -93,14 +111,22 @@ def lambda_handler(event, context):
                 break
         
         if not boundary:
-            log_structured("ERROR", "No boundary found in Content-Type", correlation_id)
+            log_structured("ERROR", "No boundary found in Content-Type", correlation_id,
+                          content_type_full=content_type,
+                          content_type_parts=[p.strip() for p in content_type.split(';')])
             return error_response(400, "No boundary found in Content-Type")
         
         # Parse multipart data (simplified parser)
-        log_structured("DEBUG", "Parsing multipart CSV data", correlation_id, boundary=boundary[:20])
+        log_structured("DEBUG", "Parsing multipart CSV data", correlation_id, 
+                      boundary=boundary[:20],
+                      body_type=type(body).__name__,
+                      body_size=len(body),
+                      body_starts_with=body[:50] if len(body) > 50 else body)
+        
         csv_data = parse_multipart_csv(body, boundary)
         if not csv_data:
-            log_structured("ERROR", "No CSV file found in upload", correlation_id)
+            log_structured("ERROR", "No CSV file found in upload", correlation_id,
+                          multipart_parts_found=len(body.split(f"--{boundary}".encode())) - 1 if isinstance(body, bytes) else 0)
             return error_response(400, "No CSV file found in upload")
         
         # Validate file size
@@ -243,26 +269,38 @@ def lambda_handler(event, context):
 
 def parse_multipart_csv(body: bytes, boundary: str) -> bytes:
     """
-    Simple multipart parser to extract CSV data.
+    Simple multipart parser to extract CSV data with enhanced debugging.
     """
     try:
         boundary_bytes = f"--{boundary}".encode()
         parts = body.split(boundary_bytes)
         
-        for part in parts:
+        logger.info(f"Multipart parsing: found {len(parts)} parts with boundary '{boundary}'")
+        
+        for i, part in enumerate(parts):
+            logger.debug(f"Part {i}: length={len(part)}, starts_with={part[:100]}")
+            
             if b'Content-Disposition: form-data' in part and b'filename=' in part:
+                logger.info(f"Found file part {i} with Content-Disposition and filename")
+                
                 # Find the start of file data (after double CRLF)
                 header_end = part.find(b'\r\n\r\n')
                 if header_end == -1:
                     header_end = part.find(b'\n\n')
+                    logger.debug(f"Using \\n\\n delimiter at position {header_end}")
+                else:
+                    logger.debug(f"Using \\r\\n\\r\\n delimiter at position {header_end}")
                 
                 if header_end != -1:
                     file_data = part[header_end + 4:]  # Skip the double CRLF
                     # Remove trailing boundary marker if present
                     if file_data.endswith(b'\r\n'):
                         file_data = file_data[:-2]
+                    
+                    logger.info(f"Extracted CSV data: {len(file_data)} bytes, starts_with={file_data[:50]}")
                     return file_data
         
+        logger.error("No file part found in multipart data")
         return None
         
     except Exception as e:
