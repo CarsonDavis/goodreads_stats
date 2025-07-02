@@ -4,10 +4,6 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_iam as iam,
     aws_logs as logs,
-    aws_sqs as sqs,
-    aws_lambda_event_sources as lambda_event_sources,
-    aws_events as events,
-    aws_events_targets as targets,
     Duration,
     CfnOutput,
     BundlingOptions
@@ -40,12 +36,17 @@ class ApiStack(Stack):
             description="Shared dependencies for Goodreads Stats Lambda functions"
         )
         
+        # Configuration
+        BOOK_PROCESSOR_CONCURRENCY = 350
+        CHUNK_SIZE = 350
+        
         # Environment variables for all Lambda functions
         base_env = {
             "DATA_BUCKET": storage_stack.data_bucket.bucket_name,
             "ENVIRONMENT": deployment_env,
             "PYTHONPATH": "/opt:/var/runtime",
-            "LOG_LEVEL": "INFO" if deployment_env == "prod" else "DEBUG"
+            "LOG_LEVEL": "INFO" if deployment_env == "prod" else "DEBUG",
+            "CHUNK_SIZE": str(CHUNK_SIZE)
         }
         
         # BookProcessor Lambda role
@@ -58,37 +59,7 @@ class ApiStack(Stack):
         )
         storage_stack.data_bucket.grant_read_write(book_processor_role)
         
-        # Aggregator Lambda role
-        aggregator_role = iam.Role(
-            self, "AggregatorRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-            ]
-        )
-        storage_stack.data_bucket.grant_read_write(aggregator_role)
-        
-        # SQS Queues for book processing
-        # Dead Letter Queue
-        book_processing_dlq = sqs.Queue(
-            self, "BookProcessingDLQ",
-            queue_name=f"goodreads-book-processing-dlq-{deployment_env}",
-            retention_period=Duration.days(14)
-        )
-        
-        # Main processing queue
-        self.book_processing_queue = sqs.Queue(
-            self, "BookProcessingQueue", 
-            queue_name=f"goodreads-book-processing-{deployment_env}",
-            visibility_timeout=Duration.minutes(2),  # 2x Lambda timeout
-            dead_letter_queue=sqs.DeadLetterQueue(
-                max_receive_count=3,
-                queue=book_processing_dlq
-            ),
-            retention_period=Duration.days(1)  # Messages expire after 1 day
-        )
-        
-        # Orchestrator Lambda role with SQS permissions
+        # Orchestrator Lambda role
         orchestrator_role = iam.Role(
             self, "OrchestratorRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -97,7 +68,6 @@ class ApiStack(Stack):
             ]
         )
         storage_stack.data_bucket.grant_read_write(orchestrator_role)
-        self.book_processing_queue.grant_send_messages(orchestrator_role)
         
         # Create log group for BookProcessor
         book_processor_log_group = logs.LogGroup(
@@ -106,98 +76,47 @@ class ApiStack(Stack):
             retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
-        # BookProcessor Lambda - Processes individual books
+        # BookProcessor Lambda with reserved concurrency
         self.book_processor = _lambda.Function(
             self, "BookProcessor",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset("lambda_code/book_processor"),
-            timeout=Duration.seconds(60),  # Increased timeout for SQS processing
-            memory_size=256,  # Lower memory for single book processing
+            timeout=Duration.seconds(300),  # 5-minute timeout
+            memory_size=512,
             role=book_processor_role,
             environment=base_env,
             layers=[lambda_layer],
-            log_group=book_processor_log_group
+            log_group=book_processor_log_group,
+            reserved_concurrent_executions=BOOK_PROCESSOR_CONCURRENCY
         )
         
-        # Add SQS event source to BookProcessor
-        self.book_processor.add_event_source(
-            lambda_event_sources.SqsEventSource(
-                self.book_processing_queue,
-                batch_size=1,  # Process one book at a time
-                max_batching_window=Duration.seconds(1)
-            )
-        )
-        
-        # Create log group for Aggregator
-        aggregator_log_group = logs.LogGroup(
-            self, "AggregatorLogGroup",
-            log_group_name=f"/aws/lambda/Aggregator-{deployment_env}",
-            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
-        )
-        
-        # Aggregator Lambda - Combines results and creates final JSON
-        self.aggregator = _lambda.Function(
-            self, "Aggregator",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="lambda_function.lambda_handler",
-            code=_lambda.Code.from_asset("lambda_code/aggregator"),
-            timeout=Duration.minutes(5),  # 5-minute timeout for aggregation
-            memory_size=512,  # Medium memory for aggregation
-            role=aggregator_role,
-            environment={
-                **base_env,
-                "S3_BUCKET_NAME": storage_stack.data_bucket.bucket_name
-            },
-            layers=[lambda_layer],
-            log_group=aggregator_log_group
-        )
-        
-        # CloudWatch Events Rule for aggregator trigger
-        # The aggregator will be triggered periodically to check for completion
-        
-        # Create CloudWatch Events rule to trigger aggregator every minute
-        aggregator_trigger_rule = events.Rule(
-            self, "AggregatorTriggerRule",
-            description="Triggers aggregator to check for completion",
-            schedule=events.Schedule.rate(Duration.minutes(1))
-        )
-        
-        # Add aggregator as target
-        aggregator_trigger_rule.add_target(
-            targets.LambdaFunction(self.aggregator)
-        )
-        
-        # Grant Events permission to invoke aggregator
-        self.aggregator.add_permission(
-            "AllowCloudWatchEvents",
-            principal=iam.ServicePrincipal("events.amazonaws.com"),
-            source_arn=aggregator_trigger_rule.rule_arn
-        )
-        
-        # Create log group for Orchestrator  
+        # Orchestrator Lambda
         orchestrator_log_group = logs.LogGroup(
             self, "OrchestratorLogGroup",
             log_group_name=f"/aws/lambda/Orchestrator-{deployment_env}",
             retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
         )
         
-        # Orchestrator Lambda (refactored to use SQS)
         self.orchestrator = _lambda.Function(
             self, "Orchestrator",
             runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="lambda_function.lambda_handler", 
+            handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset("lambda_code/orchestrator"),
-            timeout=Duration.minutes(5),  # Time to process CSV and send SQS messages
-            memory_size=512,  # Memory for CSV processing
+            timeout=Duration.minutes(15),  # 15-minute timeout
+            memory_size=3008,  # Maximum memory (3GB)
             role=orchestrator_role,
             environment={
                 **base_env,
-                "BOOK_QUEUE_URL": self.book_processing_queue.queue_url
+                "BOOK_PROCESSOR_FUNCTION_NAME": self.book_processor.function_name
             },
             layers=[lambda_layer],
             log_group=orchestrator_log_group
         )
+        
+        # Grant orchestrator permission to invoke book processor
+        self.book_processor.grant_invoke(self.orchestrator)
+        
 
         # Upload Handler Lambda role  
         upload_role = iam.Role(
@@ -227,7 +146,7 @@ class ApiStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset("lambda_code/upload_handler"),
-            timeout=Duration.minutes(2),
+            timeout=Duration.minutes(20),  # Extended timeout to wait for orchestrator completion
             memory_size=512,
             role=upload_role,
             environment=upload_env,
@@ -235,36 +154,6 @@ class ApiStack(Stack):
             log_group=upload_handler_log_group
         )
         
-        # Status Checker Lambda role
-        status_role = iam.Role(
-            self, "StatusRole", 
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-            ]
-        )
-        storage_stack.data_bucket.grant_read_write(status_role)
-        
-        # Create log group for Status Checker
-        status_checker_log_group = logs.LogGroup(
-            self, "StatusCheckerLogGroup",
-            log_group_name=f"/aws/lambda/StatusChecker-{deployment_env}",
-            retention=logs.RetentionDays.ONE_WEEK if deployment_env != "prod" else logs.RetentionDays.ONE_MONTH
-        )
-        
-        # Status Checker Lambda
-        self.status_checker = _lambda.Function(
-            self, "StatusChecker",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="lambda_function.lambda_handler",
-            code=_lambda.Code.from_asset("lambda_code/status_checker"),
-            timeout=Duration.seconds(30),
-            memory_size=256,
-            role=status_role,
-            environment=base_env,
-            layers=[lambda_layer],
-            log_group=status_checker_log_group
-        )
         
         # API Gateway
         domain_name = f"goodreads-stats.codebycarson.com" if deployment_env == "prod" else f"dev.goodreads-stats.codebycarson.com"
@@ -308,21 +197,9 @@ class ApiStack(Stack):
             upload_integration
         )
         
-        # GET /api/status/{uuid}
-        status_integration = apigateway.LambdaIntegration(self.status_checker)
-        status_resource = api_resource.add_resource("status")
-        status_uuid_resource = status_resource.add_resource("{uuid}")
-        status_uuid_resource.add_method("GET", status_integration)
-        
-        # GET /api/data/{uuid} - returns dashboard JSON
-        data_integration = apigateway.LambdaIntegration(self.status_checker)
-        data_resource = api_resource.add_resource("data")
-        data_uuid_resource = data_resource.add_resource("{uuid}")
-        data_uuid_resource.add_method("GET", data_integration)
-        
-        # DELETE /api/data/{uuid} - deletes user data
-        delete_integration = apigateway.LambdaIntegration(self.status_checker)
-        data_uuid_resource.add_method("DELETE", delete_integration)
+        # GET /api/data/{job_id} - returns dashboard JSON
+        # This will be handled by a simple S3 proxy or direct S3 access
+        # For now, we'll leave this as a placeholder for future implementation
         
         # Grant upload handler permission to invoke orchestrator
         self.orchestrator.grant_invoke(self.upload_handler)
@@ -353,25 +230,7 @@ class ApiStack(Stack):
         )
         
         CfnOutput(
-            self, "StatusCheckerArn",
-            value=self.status_checker.function_arn,
-            description="Status Checker Lambda ARN"
-        )
-        
-        CfnOutput(
             self, "BookProcessorArn",
             value=self.book_processor.function_arn,
             description="Book Processor Lambda ARN"
-        )
-        
-        CfnOutput(
-            self, "AggregatorArn",
-            value=self.aggregator.function_arn,
-            description="Aggregator Lambda ARN"
-        )
-        
-        CfnOutput(
-            self, "BookProcessingQueueUrl",
-            value=self.book_processing_queue.queue_url,
-            description="SQS Queue URL for book processing"
         )

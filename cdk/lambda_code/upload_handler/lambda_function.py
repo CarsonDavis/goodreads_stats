@@ -21,10 +21,10 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 def lambda_handler(event, context):
     """
-    Handle CSV file uploads and trigger processing.
+    Handle CSV file uploads and process them synchronously.
     
     Expects API Gateway event with multipart/form-data containing CSV file.
-    Returns UUID for tracking processing status.
+    Returns complete processing results including job statistics.
     """
     try:
         logger.info(f"Upload handler invoked: {json.dumps(event, default=str)}")
@@ -68,12 +68,12 @@ def lambda_handler(event, context):
         if not is_valid_csv(csv_data):
             return error_response(400, "Invalid CSV format or not a Goodreads export")
         
-        # Generate UUID for this processing job
-        processing_uuid = str(uuid.uuid4())
-        logger.info(f"Generated UUID: {processing_uuid}")
+        # Generate job ID for this processing job
+        job_id = str(uuid.uuid4())
+        logger.info(f"Generated job ID: {job_id}")
         
         # Save CSV to S3
-        csv_key = f"uploads/{processing_uuid}/raw.csv"
+        csv_key = f"uploads/{job_id}/raw.csv"
         s3_client.put_object(
             Bucket=DATA_BUCKET,
             Key=csv_key,
@@ -83,13 +83,13 @@ def lambda_handler(event, context):
         
         # Save metadata
         metadata = {
-            'uuid': processing_uuid,
+            'job_id': job_id,
             'upload_time': datetime.now().isoformat(),
             'file_size': len(csv_data),
             'environment': ENVIRONMENT
         }
         
-        metadata_key = f"uploads/{processing_uuid}/metadata.json"
+        metadata_key = f"uploads/{job_id}/metadata.json"
         s3_client.put_object(
             Bucket=DATA_BUCKET,
             Key=metadata_key,
@@ -97,71 +97,63 @@ def lambda_handler(event, context):
             ContentType='application/json'
         )
         
-        # Initialize status
-        status = {
-            'uuid': processing_uuid,
-            'status': 'processing',
-            'upload_time': datetime.now().isoformat(),
-            'file_size': len(csv_data),
-            'progress': {
-                'total_books': 0,
-                'processed_books': 0,
-                'percent_complete': 0
-            },
-            'message': 'Upload successful, processing started'
-        }
-        
-        status_key = f"status/{processing_uuid}.json"
-        s3_client.put_object(
-            Bucket=DATA_BUCKET,
-            Key=status_key,
-            Body=json.dumps(status),
-            ContentType='application/json'
-        )
-        
-        # Trigger orchestrator function asynchronously
+        # Invoke orchestrator synchronously and wait for complete results
         orchestrator_name = os.environ.get('ORCHESTRATOR_FUNCTION_NAME', f"GoodreadsStats-{ENVIRONMENT.title()}-Api-Orchestrator")
         orchestrator_payload = {
-            'uuid': processing_uuid,
-            'bucket': DATA_BUCKET,
-            'csv_key': csv_key
+            'csv_key': csv_key,
+            'job_id': job_id
         }
+        
+        logger.info(f"Invoking orchestrator synchronously for {job_id}")
         
         try:
-            lambda_client.invoke(
+            # Synchronous invocation - wait for completion
+            orchestrator_response = lambda_client.invoke(
                 FunctionName=orchestrator_name,
-                InvocationType='Event',  # Async
+                InvocationType='RequestResponse',  # Wait for completion
                 Payload=json.dumps(orchestrator_payload)
             )
-            logger.info(f"Triggered orchestrator for {processing_uuid}")
+            
+            # Parse orchestrator response
+            response_payload = orchestrator_response['Payload'].read()
+            result = json.loads(response_payload)
+            
+            logger.info(f"Orchestrator completed for {job_id}: {result}")
+            
+            # Check for orchestrator errors
+            if result.get('statusCode') == 500:
+                raise Exception(f"Orchestrator failed: {result.get('error_message', 'Unknown error')}")
+            
+            # Return success response with complete processing results
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                },
+                'body': json.dumps({
+                    'job_id': result['job_id'],
+                    'status': 'complete',
+                    'processing_time': result['processing_time_seconds'],
+                    'books_processed': result['total_books'],
+                    'successful_enrichments': result['successful_books'],
+                    'failed_enrichments': result['failed_books'],
+                    'success_rate': result['success_rate'],
+                    'chunks_processed': result['chunks_processed']
+                })
+            }
+            
         except Exception as e:
-            logger.error(f"Failed to trigger orchestrator: {e}")
-            # Update status to error
-            status['status'] = 'error'
-            status['error_message'] = 'Failed to start processing'
-            s3_client.put_object(
-                Bucket=DATA_BUCKET,
-                Key=status_key,
-                Body=json.dumps(status),
-                ContentType='application/json'
-            )
-            return error_response(500, "Failed to start processing")
-        
-        # Return success response
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            'body': json.dumps({
-                'uuid': processing_uuid,
-                'status': 'processing',
-                'message': 'Upload successful, processing started'
-            })
-        }
+            logger.error(f"Failed to process with orchestrator: {e}")
+            # Clean up uploaded files on failure
+            try:
+                s3_client.delete_object(Bucket=DATA_BUCKET, Key=csv_key)
+                s3_client.delete_object(Bucket=DATA_BUCKET, Key=metadata_key)
+            except:
+                pass
+            return error_response(500, "Processing failed")
         
     except Exception as e:
         logger.error(f"Upload handler error: {e}", exc_info=True)

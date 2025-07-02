@@ -14,6 +14,41 @@ from genres.models.book import BookInfo
 from genres.pipeline.enricher import AsyncGenreEnricher
 
 
+def lambda_handler(event, context):
+    """
+    Lambda handler that processes individual books and returns enriched data directly.
+    
+    Expected event format (direct invocation):
+    {
+        "book": {
+            "title": "Book Title",
+            "author": "Author Name", 
+            "isbn13": "9781234567890",
+            "isbn": "1234567890",
+            "goodreads_id": "12345"
+        }
+    }
+    """
+    try:
+        logger.info(f"BookProcessor invoked for book enrichment")
+        
+        # Extract book data from direct invocation
+        book_data = event.get('book', {})
+        if not book_data:
+            raise ValueError("No book data provided in event")
+        
+        logger.info(f"Processing book: {book_data.get('title', 'Unknown')} by {book_data.get('author', 'Unknown')}")
+        
+        # Process the book
+        result = asyncio.run(enrich_single_book(book_data))
+        logger.info(f"Successfully processed book: {book_data.get('title', 'Unknown')}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"BookProcessor failed: {e}", exc_info=True)
+        return create_failed_result(event.get('book', {}), str(e))
+
+
 async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Enrich a single book using the existing AsyncGenreEnricher.
@@ -22,7 +57,7 @@ async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
         book_data: Dictionary containing book information
         
     Returns:
-        Dictionary containing enriched book data
+        Dictionary containing enriched book data in standardized format
     """
     try:
         # Create BookInfo object from input data - filter to only expected fields
@@ -39,155 +74,46 @@ async def enrich_single_book(book_data: Dict[str, Any]) -> Dict[str, Any]:
         async with AsyncGenreEnricher(max_concurrent=1) as enricher:
             enriched_book = await enricher.enrich_book_async(book_info)
             
-            # Return enriched data in expected format
+            # Return enriched data in standardized format for orchestrator
             return {
-                'statusCode': 200,
-                'body': {
-                    'isbn': enriched_book.input_info.isbn,
-                    'title': enriched_book.input_info.title,
-                    'author': enriched_book.input_info.author,
-                    'final_genres': enriched_book.final_genres,
-                    'thumbnail_url': enriched_book.thumbnail_url,
-                    'genre_sources': getattr(enriched_book, 'genre_sources', []),
-                    'enrichment_logs': enriched_book.processing_log,
-                    'genre_enrichment_success': len(enriched_book.final_genres) > 0
-                }
+                'book_id': enriched_book.input_info.goodreads_id or f"{enriched_book.input_info.title}-{enriched_book.input_info.author}",
+                'title': enriched_book.input_info.title,
+                'author': enriched_book.input_info.author,
+                'success': True,
+                'final_genres': enriched_book.final_genres,
+                'thumbnail_url': enriched_book.thumbnail_url,
+                'genre_enrichment_success': len(enriched_book.final_genres) > 0,
+                'error_message': None,
+                'processing_logs': enriched_book.processing_log
             }
             
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout enriching book {book_data.get('title', 'Unknown')}")
+        return create_failed_result(book_data, "API timeout during enrichment")
     except Exception as e:
         logger.error(f"Error enriching book {book_data.get('title', 'Unknown')}: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': {
-                'isbn': book_data.get('isbn', ''),
-                'title': book_data.get('title', ''),
-                'author': book_data.get('author', ''),
-                'final_genres': [],
-                'thumbnail_url': None,
-                'genre_sources': [],
-                'enrichment_logs': [f"Enrichment failed: {str(e)}"],
-                'genre_enrichment_success': False,
-                'error': str(e)
-            }
-        }
+        return create_failed_result(book_data, f"Enrichment failed: {str(e)}")
 
 
-def lambda_handler(event, context):
+def create_failed_result(book_data: Dict[str, Any], error_message: str) -> Dict[str, Any]:
     """
-    Lambda handler that processes books from SQS events.
+    Create a standardized failed result.
     
-    SQS event format:
-    {
-        "Records": [
-            {
-                "body": "{\"book\": {...}, \"processing_uuid\": \"...\", ...}"
-            }
-        ]
+    Args:
+        book_data: Original book data
+        error_message: Error message
+        
+    Returns:
+        Standardized failed result dictionary
+    """
+    return {
+        'book_id': book_data.get('goodreads_id') or f"{book_data.get('title', '')}-{book_data.get('author', '')}",
+        'title': book_data.get('title', ''),
+        'author': book_data.get('author', ''),
+        'success': False,
+        'final_genres': [],
+        'thumbnail_url': None,
+        'genre_enrichment_success': False,
+        'error_message': error_message,
+        'processing_logs': [f"Processing failed: {error_message}"]
     }
-    """
-    try:
-        logger.info(f"BookProcessor invoked with {len(event.get('Records', []))} records")
-        
-        # Handle SQS event
-        if 'Records' in event:
-            results = []
-            for record in event['Records']:
-                try:
-                    # Parse SQS message body
-                    message_body = json.loads(record['body'])
-                    book_data = message_body.get('book', {})
-                    processing_uuid = message_body.get('processing_uuid')
-                    
-                    if not book_data:
-                        raise ValueError("No book data in SQS message")
-                    
-                    logger.info(f"Processing book: {book_data.get('title', 'Unknown')} for UUID: {processing_uuid}")
-                    
-                    # Process the book
-                    result = asyncio.run(enrich_single_book(book_data))
-                    
-                    # Store enriched result in S3 for aggregator
-                    if processing_uuid and result.get('statusCode') == 200:
-                        store_enriched_result(processing_uuid, book_data, result, message_body)
-                    
-                    results.append(result)
-                    logger.info(f"Successfully processed book: {book_data.get('title', 'Unknown')}")
-                    
-                except Exception as e:
-                    logger.error(f"Error processing SQS record: {e}", exc_info=True)
-                    # Don't fail the entire batch, just log the error
-                    results.append({
-                        'statusCode': 500,
-                        'body': {
-                            'error': str(e),
-                            'final_genres': [],
-                            'genre_enrichment_success': False
-                        }
-                    })
-            
-            return {
-                'statusCode': 200,
-                'processedRecords': len(results),
-                'results': results
-            }
-        
-        # Fallback for direct invocation (backward compatibility)
-        else:
-            book_data = event.get('book', {})
-            if not book_data:
-                raise ValueError("No book data provided in event")
-            
-            result = asyncio.run(enrich_single_book(book_data))
-            logger.info(f"Successfully processed book: {book_data.get('title', 'Unknown')}")
-            return result
-        
-    except Exception as e:
-        logger.error(f"BookProcessor failed: {e}", exc_info=True)
-        return {
-            'statusCode': 500,
-            'body': {
-                'error': str(e),
-                'final_genres': [],
-                'genre_enrichment_success': False
-            }
-        }
-
-
-def store_enriched_result(processing_uuid: str, book_data: Dict, result: Dict, message_body: Dict):
-    """Store enriched result in S3 for aggregator to collect"""
-    import boto3
-    import os
-    
-    s3_client = boto3.client('s3')
-    data_bucket = os.environ.get('DATA_BUCKET')
-    
-    if not data_bucket:
-        logger.warning("DATA_BUCKET not set, skipping result storage")
-        return
-    
-    try:
-        # Create a unique key for this enriched result
-        book_title = book_data.get('title', 'unknown').replace('/', '_').replace('\\', '_')
-        book_isbn = book_data.get('isbn', book_data.get('isbn13', 'no-isbn'))
-        result_key = f"processing/{processing_uuid}/enriched/{book_isbn}_{book_title[:50]}.json"
-        
-        # Store the enriched result
-        enriched_data = {
-            'original_book': book_data,
-            'enriched_result': result,
-            'processing_uuid': processing_uuid,
-            'timestamp': str(int(__import__('time').time()))
-        }
-        
-        s3_client.put_object(
-            Bucket=data_bucket,
-            Key=result_key,
-            Body=json.dumps(enriched_data),
-            ContentType='application/json'
-        )
-        
-        logger.info(f"Stored enriched result: {result_key}")
-        
-    except Exception as e:
-        logger.error(f"Failed to store enriched result: {e}")
-        # Don't fail the processing, just log the error
