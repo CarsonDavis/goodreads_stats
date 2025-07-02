@@ -240,11 +240,7 @@ class ApiStack(Stack):
                     resource_path=True,
                     response_length=True,
                     status=True,
-                    user=True,
-                    request_id=True,
-                    extended_request_id=True,
-                    error_message=True,
-                    error_message_string=True
+                    user=True
                 ),
                 tracing_enabled=True,  # Enable X-Ray tracing
                 data_trace_enabled=True,  # Log request/response data
