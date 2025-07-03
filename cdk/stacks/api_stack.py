@@ -230,7 +230,6 @@ class ApiStack(Stack):
                 max_age=Duration.hours(1),
             ),
             deploy_options=apigateway.StageOptions(
-                stage_name=deployment_env,  # Use deployment environment as stage name
                 access_log_destination=apigateway.LogGroupLogDestination(api_log_group),
                 access_log_format=apigateway.AccessLogFormat.json_with_standard_fields(
                     caller=True,
