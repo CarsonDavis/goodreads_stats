@@ -116,8 +116,9 @@ class CSVUploader {
             throw new Error(errorData.error || errorData.detail || 'Upload failed');
         }
         
-        const { uuid } = await uploadResponse.json();
-        console.log('Upload successful, UUID:', uuid);
+        const uploadResult = await uploadResponse.json();
+        const uuid = uploadResult.job_id || uploadResult.uuid;
+        console.log('Upload successful, Job ID:', uuid, 'Status:', uploadResult.status);
         
         // Poll for completion
         await this.pollForCompletion(uuid);
@@ -135,39 +136,35 @@ class CSVUploader {
         
         while (attempts < maxAttempts) {
             try {
-                const statusResponse = await fetch(`${this.env.apiBase}/status/${uuid}`);
+                // Check if processing is complete by trying to get the data
+                const dataResponse = await fetch(`${this.env.apiBase}/data/${uuid}`);
                 
-                if (!statusResponse.ok) {
-                    throw new Error('Failed to check status');
-                }
-                
-                const status = await statusResponse.json();
-                
-                if (status.status === 'complete') {
+                if (dataResponse.ok) {
+                    // Data is available - processing complete!
                     this.updateProgress(95, 'Processing complete!');
                     return;
-                } else if (status.status === 'error') {
-                    throw new Error(status.error_message || 'Processing failed');
-                } else if (status.status === 'processing') {
-                    // Update progress based on API response
-                    const progress = status.progress || {};
-                    const percent = Math.max(20, Math.min(90, progress.percent_complete || 20));
-                    const message = status.message || 
-                        `Processing... ${progress.processed_books || 0}/${progress.total_books || '?'} books`;
+                } else if (dataResponse.status === 404) {
+                    // Data not ready yet - continue polling
+                    const waitTime = Math.min(attempts * 500 + 2000, 10000); // 2-10 second intervals
+                    const message = attempts < 5 ? 'Processing your books...' : 
+                                   attempts < 20 ? 'Still processing (this may take a few minutes)...' :
+                                   'Processing is taking longer than usual, but still working...';
                     
-                    this.updateProgress(percent, message);
+                    this.updateProgress(20 + Math.min(attempts * 2, 70), message);
+                    
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    attempts++;
+                    continue;
+                } else {
+                    throw new Error(`Processing check failed: ${dataResponse.status}`);
                 }
                 
-                // Wait 5 seconds before next poll
-                await new Promise(resolve => setTimeout(resolve, 5000));
-                attempts++;
-                
             } catch (error) {
-                console.error('Status check error:', error);
+                console.error('Processing check error:', error);
                 attempts++;
                 
                 if (attempts >= maxAttempts) {
-                    throw error;
+                    throw new Error('Processing timed out. Please try again.');
                 }
                 
                 // Wait before retry

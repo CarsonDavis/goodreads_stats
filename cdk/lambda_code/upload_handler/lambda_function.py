@@ -173,7 +173,7 @@ def lambda_handler(event, context):
             ContentType='application/json'
         )
         
-        # Invoke orchestrator synchronously and wait for complete results
+        # Invoke orchestrator asynchronously and return immediately
         orchestrator_name = os.environ.get('ORCHESTRATOR_FUNCTION_NAME', f"GoodreadsStats-{ENVIRONMENT.title()}-Api-Orchestrator")
         orchestrator_payload = {
             'csv_key': csv_key,
@@ -181,61 +181,26 @@ def lambda_handler(event, context):
             'correlation_id': correlation_id  # Pass correlation ID to orchestrator
         }
         
-        log_structured("INFO", "Invoking orchestrator synchronously", correlation_id,
+        log_structured("INFO", "Invoking orchestrator asynchronously", correlation_id,
                       job_id=job_id, orchestrator_function=orchestrator_name)
         
         try:
-            orchestrator_start_time = time.time()
-            
-            # Synchronous invocation - wait for completion
-            orchestrator_response = lambda_client.invoke(
+            # Asynchronous invocation - fire and forget
+            lambda_client.invoke(
                 FunctionName=orchestrator_name,
-                InvocationType='RequestResponse',  # Wait for completion
+                InvocationType='Event',  # Asynchronous execution
                 Payload=json.dumps(orchestrator_payload)
             )
             
-            orchestrator_duration = time.time() - orchestrator_start_time
-            
-            # Parse orchestrator response
-            response_payload = orchestrator_response['Payload'].read()
-            result = json.loads(response_payload)
-            
-            log_structured("INFO", "Orchestrator completed", correlation_id,
-                          job_id=job_id, 
-                          orchestrator_duration_seconds=round(orchestrator_duration, 2),
-                          orchestrator_status_code=result.get('statusCode'),
-                          total_books=result.get('total_books'),
-                          successful_books=result.get('successful_books'),
-                          processing_time_seconds=result.get('processing_time_seconds'))
-            
-            # Check for orchestrator errors
-            if result.get('statusCode') == 500:
-                log_structured("ERROR", "Orchestrator failed", correlation_id,
-                              job_id=job_id, error_message=result.get('error_message'))
-                raise Exception(f"Orchestrator failed: {result.get('error_message', 'Unknown error')}")
-            
             total_duration = time.time() - start_time
             
-            # Return success response with complete processing results
-            response_body = {
-                'job_id': result['job_id'],
-                'status': 'complete',
-                'processing_time': result['processing_time_seconds'],
-                'books_processed': result['total_books'],
-                'successful_enrichments': result['successful_books'],
-                'failed_enrichments': result['failed_books'],
-                'success_rate': result['success_rate'],
-                'chunks_processed': result['chunks_processed'],
-                'correlation_id': correlation_id
-            }
-            
-            log_structured("INFO", "Upload completed successfully", correlation_id,
+            log_structured("INFO", "Orchestrator invoked successfully", correlation_id,
                           job_id=job_id,
-                          total_duration_seconds=round(total_duration, 2),
-                          **{k: v for k, v in response_body.items() if k not in ['correlation_id', 'job_id']})
+                          total_duration_seconds=round(total_duration, 2))
             
+            # Return immediate response - processing will continue in background
             return {
-                'statusCode': 200,
+                'statusCode': 202,  # Accepted - processing started
                 'headers': {
                     'Content-Type': 'application/json',
                     'Access-Control-Allow-Origin': '*',
@@ -243,7 +208,12 @@ def lambda_handler(event, context):
                     'Access-Control-Allow-Methods': 'POST, OPTIONS',
                     'X-Correlation-ID': correlation_id
                 },
-                'body': json.dumps(response_body)
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'processing',
+                    'message': 'Upload successful. Processing started in background.',
+                    'correlation_id': correlation_id
+                })
             }
             
         except Exception as e:
