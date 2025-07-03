@@ -232,7 +232,7 @@ def lambda_handler(event, context):
             log_structured("INFO", "Upload completed successfully", correlation_id,
                           job_id=job_id,
                           total_duration_seconds=round(total_duration, 2),
-                          **{k: v for k, v in response_body.items() if k != 'correlation_id'})
+                          **{k: v for k, v in response_body.items() if k not in ['correlation_id', 'job_id']})
             
             return {
                 'statusCode': 200,
