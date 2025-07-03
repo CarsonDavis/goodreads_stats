@@ -112,8 +112,8 @@ class CSVUploader {
         });
         
         if (!uploadResponse.ok) {
-            const errorData = await uploadResponse.json().catch(() => ({ detail: 'Upload failed' }));
-            throw new Error(errorData.detail || 'Upload failed');
+            const errorData = await uploadResponse.json().catch(() => ({ error: 'Upload failed' }));
+            throw new Error(errorData.error || errorData.detail || 'Upload failed');
         }
         
         const { uuid } = await uploadResponse.json();
