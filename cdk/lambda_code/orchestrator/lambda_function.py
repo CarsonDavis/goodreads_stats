@@ -410,10 +410,38 @@ def create_final_dashboard_json(enriched_results: List[Dict], original_books: Li
         
         final_books.append(combined_book)
     
+    # Calculate summary analytics
+    total_pages = sum(book.get('pages', 0) or 0 for book in final_books if book.get('pages'))
+    ratings = [book.get('my_rating', 0) for book in final_books if book.get('my_rating', 0) > 0]
+    average_rating = sum(ratings) / len(ratings) if ratings else 0
+    
+    # Get reading years and date range
+    read_dates = [book.get('date_read') for book in final_books if book.get('date_read')]
+    reading_years = list(set(date[:4] for date in read_dates if date)) if read_dates else []
+    reading_date_range = {
+        'earliest': min(read_dates) if read_dates else None,
+        'latest': max(read_dates) if read_dates else None
+    }
+    
+    # Get most common genres
+    all_genres = []
+    for book in final_books:
+        if book.get('final_genres'):
+            all_genres.extend(book['final_genres'])
+    
+    from collections import Counter
+    genre_counts = Counter(all_genres)
+    most_common_genres = [{'genre': genre, 'count': count} for genre, count in genre_counts.most_common(10)]
+    
     # Create final dashboard structure
     dashboard_data = {
-        'metadata': {
+        'summary': {
             'total_books': len(final_books),
+            'total_pages': total_pages,
+            'average_rating': average_rating,
+            'reading_years': reading_years,
+            'reading_date_range': reading_date_range,
+            'most_common_genres': most_common_genres,
             'successful_enrichments': len([b for b in final_books if b.get('genre_enrichment_success', False)]),
             'failed_enrichments': len([b for b in final_books if not b.get('genre_enrichment_success', False)]),
             'processing_timestamp': datetime.now().isoformat(),
