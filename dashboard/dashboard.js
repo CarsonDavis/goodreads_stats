@@ -57,6 +57,12 @@ class ReadingDashboard {
                 this.hideDeleteModal();
             }
         });
+
+        // Share functionality
+        const shareButton = document.getElementById('shareButton');
+        shareButton?.addEventListener('click', () => {
+            this.shareUrl();
+        });
     }
 
     async loadData() {
@@ -502,6 +508,66 @@ class ReadingDashboard {
             confirmButton.textContent = 'Delete Forever';
             confirmButton.disabled = false;
         }
+    }
+
+    shareUrl() {
+        const currentUrl = window.location.href;
+        
+        // Try to use the modern clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(currentUrl).then(() => {
+                this.showShareSuccess();
+            }).catch(() => {
+                this.fallbackCopyToClipboard(currentUrl);
+            });
+        } else {
+            this.fallbackCopyToClipboard(currentUrl);
+        }
+    }
+
+    fallbackCopyToClipboard(text) {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            this.showShareSuccess();
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            this.showShareError();
+        }
+        document.body.removeChild(textArea);
+    }
+
+    showShareSuccess() {
+        const button = document.getElementById('shareButton');
+        const originalText = button.textContent;
+        button.textContent = '✅ Copied!';
+        button.classList.add('bg-green-500');
+        button.classList.remove('bg-blue-500');
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('bg-green-500');
+            button.classList.add('bg-blue-500');
+        }, 2000);
+    }
+
+    showShareError() {
+        const button = document.getElementById('shareButton');
+        const originalText = button.textContent;
+        button.textContent = '❌ Failed';
+        button.classList.add('bg-red-500');
+        button.classList.remove('bg-blue-500');
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('bg-red-500');
+            button.classList.add('bg-blue-500');
+        }, 2000);
     }
 
     showDeleteSuccess() {
