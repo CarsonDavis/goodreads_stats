@@ -405,6 +405,10 @@ class ReadingDashboard {
         return {
             responsive: true,
             maintainAspectRatio: false,
+            onHover: (event, elements) => {
+                // Change cursor to pointer when hovering over clickable chart elements
+                event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+            },
             plugins: {
                 legend: {
                     labels: {
