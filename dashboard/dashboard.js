@@ -504,7 +504,10 @@ class ReadingDashboard {
             
             row.innerHTML = `
                 <td class="py-3 px-4 text-white font-medium">
-                    ${this.truncateText(book.title, 40)}
+                    <a href="detail?id=${book.goodreads_id}&uuid=${this.uuid}"
+                       class="hover:text-blue-400 hover:underline cursor-pointer">
+                        ${this.truncateText(book.title, 40)}
+                    </a>
                 </td>
                 <td class="py-3 px-4 text-gray-300">
                     ${this.truncateText(book.author, 25)}
