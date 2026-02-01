@@ -4,3 +4,7 @@ pandas==2.1.4
 numpy==1.24.4
 python-dateutil==2.8.2
 # boto3 is included in Lambda runtime
+
+# HTML parsing (for Goodreads scraping)
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
