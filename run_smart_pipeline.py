@@ -47,7 +47,7 @@ async def main():
         print("📊 Loading books from CSV...")
         csv_processor = AnalyticsCSVProcessor()
         books = csv_processor.load_books_for_analytics(
-            "data/goodreads_library_export-2025.06.15.csv",
+            "data/goodreads_library_export-2025.01.29.csv",
             include_unread=False,
             sample_size=None  # All books
         )

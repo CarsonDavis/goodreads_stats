@@ -30,9 +30,13 @@ class EnrichedBook:
     openlib_work_response: Optional[Dict] = None
     
     # Processed genre data
+    processed_goodreads_genres: List[str] = field(default_factory=list)
     processed_google_genres: List[str] = field(default_factory=list)
     processed_openlib_genres: List[str] = field(default_factory=list)
     final_genres: List[str] = field(default_factory=list)
+
+    # Source tracking
+    goodreads_scrape_success: bool = False
     
     # Image/thumbnail data
     thumbnail_url: Optional[str] = None
@@ -55,9 +59,11 @@ class EnrichedBook:
             "title": self.input_info.title,
             "author": self.input_info.author,
             "isbn13": self.input_info.isbn13,
+            "goodreads_success": self.goodreads_scrape_success,
             "google_success": self.google_response is not None,
-            "openlib_success": (self.openlib_edition_response is not None or 
+            "openlib_success": (self.openlib_edition_response is not None or
                               self.openlib_work_response is not None),
+            "goodreads_genres_count": len(self.processed_goodreads_genres),
             "google_genres_count": len(self.processed_google_genres),
             "openlib_genres_count": len(self.processed_openlib_genres),
             "final_genres_count": len(self.final_genres),

@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 
 from ..models.book import BookInfo, EnrichedBook
 from ..sources import process_google_response, process_open_library_response
+from ..sources.goodreads import fetch_goodreads_genres
 from ..utils import merge_and_normalize
 
 
@@ -87,29 +88,59 @@ class AsyncGenreEnricher:
     
     async def enrich_book_async(self, book: BookInfo) -> EnrichedBook:
         """
-        Enrich a single book with concurrent API calls.
-        
+        Enrich a single book with genre data.
+
+        Uses Goodreads scraping as the primary source, falling back to
+        Google Books + Open Library APIs when scraping fails.
+
         Args:
             book: BookInfo to enrich
-            
+
         Returns:
             EnrichedBook with enriched genres
         """
         async with self.semaphore:  # Rate limiting
             enriched_book = EnrichedBook(input_info=book)
             enriched_book.add_log("Starting async enrichment")
-            
+
             # Rate limiting delay
             await asyncio.sleep(self.rate_limit_delay)
-            
+
+            # PRIMARY: Try Goodreads scraping first
+            goodreads_genres = []
+            if book.goodreads_id:
+                goodreads_genres = await self.fetch_goodreads_genres_async(book)
+                enriched_book.processed_goodreads_genres = goodreads_genres
+
+                if goodreads_genres:
+                    enriched_book.goodreads_scrape_success = True
+                    enriched_book.add_log(f"Goodreads: {len(goodreads_genres)} genres (primary)")
+                else:
+                    enriched_book.add_log("Goodreads: No genres found")
+            else:
+                enriched_book.add_log("Goodreads: No goodreads_id available")
+
+            # If Goodreads succeeded, use those genres directly
+            if goodreads_genres:
+                enriched_book.final_genres = goodreads_genres
+                enriched_book.add_log(f"Final: {len(goodreads_genres)} genres from Goodreads")
+
+                # Still fetch Google Books for thumbnails (but not for genres)
+                await self._fetch_thumbnails_only(book, enriched_book)
+
+                return enriched_book
+
+            # FALLBACK: Use API sources when Goodreads fails
+            enriched_book.add_log("Using API fallback (Google Books + Open Library)")
+
             # Fetch from both APIs concurrently
             google_task = self.fetch_google_data_async(book)
             openlibrary_task = self.fetch_openlibrary_data_async(book)
-            
+
             google_data, (ol_edition_data, ol_work_data) = await asyncio.gather(
                 google_task, openlibrary_task, return_exceptions=True
             )
-            
+
             # Process Google Books data
             if isinstance(google_data, dict):
                 enriched_book.google_response = google_data
@@ -117,28 +148,28 @@ class AsyncGenreEnricher:
                     google_genres = process_google_response(google_data)
                     enriched_book.processed_google_genres = google_genres
                     enriched_book.add_log(f"Google Books: {len(google_genres)} genres")
-                    
+
                     # Extract thumbnails from Google Books response
                     items = google_data.get("items", [])
                     if items:
                         volume_info = items[0].get("volumeInfo", {})
                         image_links = volume_info.get("imageLinks", {})
-                        
+
                         enriched_book.thumbnail_url = image_links.get("thumbnail")
                         enriched_book.small_thumbnail_url = image_links.get("smallThumbnail")
-                        
+
                         if enriched_book.thumbnail_url or enriched_book.small_thumbnail_url:
                             enriched_book.add_log("Google Books: Thumbnails extracted")
                         else:
                             enriched_book.add_log("Google Books: No thumbnails available")
-                            
+
                 except Exception as e:
                     enriched_book.add_log(f"Google Books processing error: {e}")
             elif isinstance(google_data, Exception):
                 enriched_book.add_log(f"Google Books error: {google_data}")
             else:
                 enriched_book.add_log("Google Books: No data")
-            
+
             # Process Open Library data
             if isinstance((ol_edition_data, ol_work_data), tuple) and not isinstance((ol_edition_data, ol_work_data), Exception):
                 ol_edition, ol_work = ol_edition_data, ol_work_data
@@ -146,7 +177,7 @@ class AsyncGenreEnricher:
                     enriched_book.openlib_edition_response = ol_edition
                 if ol_work:
                     enriched_book.openlib_work_response = ol_work
-                
+
                 try:
                     ol_genres = process_open_library_response(ol_edition, ol_work)
                     enriched_book.processed_openlib_genres = ol_genres
@@ -157,7 +188,7 @@ class AsyncGenreEnricher:
                 enriched_book.add_log(f"Open Library error: {(ol_edition_data, ol_work_data)}")
             else:
                 enriched_book.add_log("Open Library: No data")
-            
+
             # Merge and finalize
             try:
                 final_genres = merge_and_normalize(
@@ -165,11 +196,49 @@ class AsyncGenreEnricher:
                     enriched_book.processed_openlib_genres
                 )
                 enriched_book.final_genres = final_genres
-                enriched_book.add_log(f"Final: {len(final_genres)} merged genres")
+                enriched_book.add_log(f"Final: {len(final_genres)} merged genres (API fallback)")
             except Exception as e:
                 enriched_book.add_log(f"Genre merging error: {e}")
-            
+
             return enriched_book
+
+    async def fetch_goodreads_genres_async(self, book: BookInfo) -> List[str]:
+        """
+        Fetch genres from Goodreads via web scraping.
+
+        Args:
+            book: BookInfo with goodreads_id
+
+        Returns:
+            List of genre strings, empty if scraping fails
+        """
+        if not book.goodreads_id:
+            return []
+
+        return await fetch_goodreads_genres(self.session, book.goodreads_id)
+
+    async def _fetch_thumbnails_only(self, book: BookInfo, enriched_book: EnrichedBook) -> None:
+        """
+        Fetch thumbnails from Google Books without processing genres.
+
+        Used when Goodreads genres are available but we still want book covers.
+        """
+        try:
+            google_data = await self.fetch_google_data_async(book)
+            if isinstance(google_data, dict):
+                enriched_book.google_response = google_data
+                items = google_data.get("items", [])
+                if items:
+                    volume_info = items[0].get("volumeInfo", {})
+                    image_links = volume_info.get("imageLinks", {})
+
+                    enriched_book.thumbnail_url = image_links.get("thumbnail")
+                    enriched_book.small_thumbnail_url = image_links.get("smallThumbnail")
+
+                    if enriched_book.thumbnail_url or enriched_book.small_thumbnail_url:
+                        enriched_book.add_log("Google Books: Thumbnails extracted")
+        except Exception as e:
+            self.logger.debug(f"Thumbnail fetch failed for {book.title}: {e}")
     
     async def fetch_google_data_async(self, book: BookInfo) -> Optional[Dict]:
         """Async fetch from Google Books API"""
@@ -397,18 +466,20 @@ class AdaptiveGenreEnricher:
     def _lambda_response_to_enriched_book(self, lambda_response: Dict, original_book: BookInfo) -> EnrichedBook:
         """Convert Lambda response to EnrichedBook object"""
         enriched_book = EnrichedBook(input_info=original_book)
-        
+
         # Extract data from Lambda response
         enriched_book.google_response = lambda_response.get('google_response')
-        enriched_book.openlib_edition_response = lambda_response.get('openlib_edition_response')  
+        enriched_book.openlib_edition_response = lambda_response.get('openlib_edition_response')
         enriched_book.openlib_work_response = lambda_response.get('openlib_work_response')
+        enriched_book.processed_goodreads_genres = lambda_response.get('processed_goodreads_genres', [])
         enriched_book.processed_google_genres = lambda_response.get('processed_google_genres', [])
         enriched_book.processed_openlib_genres = lambda_response.get('processed_openlib_genres', [])
         enriched_book.final_genres = lambda_response.get('final_genres', [])
+        enriched_book.goodreads_scrape_success = lambda_response.get('goodreads_scrape_success', False)
         enriched_book.processing_log = lambda_response.get('processing_log', [])
         enriched_book.thumbnail_url = lambda_response.get('thumbnail_url')
         enriched_book.small_thumbnail_url = lambda_response.get('small_thumbnail_url')
-        
+
         return enriched_book
 
 

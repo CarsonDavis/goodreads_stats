@@ -1,3 +1,32 @@
+Chart.register(ChartDataLabels);
+
+// Custom plugin to draw separator line (only for genres chart)
+const separatorPlugin = {
+    id: 'separatorLine',
+    afterDraw: (chart) => {
+        const options = chart.options.plugins.separatorLine;
+        if (!options || options.separatorIndex === undefined || options.separatorIndex < 0) return;
+        if (!chart.scales.y || !chart.scales.x) return;
+
+        const ctx = chart.ctx;
+        const yAxis = chart.scales.y;
+        const xAxis = chart.scales.x;
+
+        const yPos = yAxis.getPixelForValue(options.separatorIndex);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(xAxis.left, yPos);
+        ctx.lineTo(xAxis.right, yPos);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(107, 114, 128, 0.8)';
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
+Chart.register(separatorPlugin);
+
 class ReadingDashboard {
     constructor() {
         this.data = null;
@@ -5,6 +34,7 @@ class ReadingDashboard {
         this.isDarkMode = localStorage.getItem('darkMode') === 'true';
         this.env = ENV;
         this.uuid = getUuidFromUrl();
+        this.genreData = [];
     }
 
     async init() {
@@ -224,7 +254,18 @@ class ReadingDashboard {
                     tension: 0.4
                 }]
             },
-            options: this.getChartOptions()
+            options: {
+                ...this.getChartOptions(),
+                plugins: {
+                    ...this.getChartOptions().plugins,
+                    legend: {
+                        display: false
+                    },
+                    datalabels: {
+                        display: false
+                    }
+                }
+            }
         });
     }
 
@@ -269,6 +310,15 @@ class ReadingDashboard {
                 plugins: {
                     legend: {
                         display: false
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        color: '#d1d5db',
+                        font: {
+                            weight: 'bold',
+                            size: 11
+                        }
                     }
                 }
             }
@@ -276,19 +326,61 @@ class ReadingDashboard {
     }
 
     renderGenresChart() {
-        const topGenres = this.data.summary.most_common_genres || [];
-        const top10 = topGenres.slice(0, 10);
+        // Count genres from books directly
+        const excludedGenres = ['Audiobook'];
+        const topGenres = ['Fiction', 'Nonfiction'];
+
+        const counts = {};
+        this.data.books.forEach(book => {
+            (book.genres || []).forEach(genre => {
+                const trimmedGenre = genre.trim();
+                counts[trimmedGenre] = (counts[trimmedGenre] || 0) + 1;
+            });
+        });
+
+        const allGenres = Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([genre, count]) => ({ genre, count }));
+
+        // Get Fiction and Nonfiction
+        const fictionCounts = allGenres.filter(g => topGenres.includes(g.genre));
+
+        // Get top 10 other genres (excluding Fiction, Nonfiction, Audiobook)
+        const otherGenres = allGenres
+            .filter(g => !topGenres.includes(g.genre) && !excludedGenres.includes(g.genre))
+            .slice(0, 10);
+
+        // Build combined data
+        const chartData = [];
+        fictionCounts.forEach(g => chartData.push({ ...g, isTop: true }));
+        const separatorIndex = chartData.length - 0.5;
+        otherGenres.forEach(g => chartData.push({ ...g, isTop: false }));
+
+        this.genreData = chartData;
+
+        // Build colors
+        const colors = chartData.map(g => {
+            if (g.genre === 'Fiction') return 'rgba(34, 197, 94, 0.8)';
+            if (g.genre === 'Nonfiction') return 'rgba(168, 85, 247, 0.8)';
+            return 'rgba(102, 126, 234, 0.8)';
+        });
+
+        const borderColors = chartData.map(g => {
+            if (g.genre === 'Fiction') return '#22c55e';
+            if (g.genre === 'Nonfiction') return '#a855f7';
+            return '#667eea';
+        });
 
         const ctx = document.getElementById('genresChart').getContext('2d');
         this.charts.genres = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: top10.map(g => this.truncateText(g.genre, 20)),
+                labels: chartData.map(g => this.truncateText(g.genre, 20)),
                 datasets: [{
                     label: 'Books',
-                    data: top10.map(g => g.count),
-                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
-                    borderColor: '#667eea',
+                    data: chartData.map(g => g.count),
+                    backgroundColor: colors,
+                    borderColor: borderColors,
                     borderWidth: 1
                 }]
             },
@@ -297,11 +389,27 @@ class ReadingDashboard {
                 indexAxis: 'y',
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
-                        const chartElement = elements[0];
-                        const index = chartElement.index;
-                        const genre = top10[index].genre;
+                        const index = elements[0].index;
+                        const genre = this.genreData[index].genre;
                         const uuid = this.getUuidFromUrl();
                         window.location.href = `books?uuid=${uuid}&type=genre&value=${encodeURIComponent(genre)}`;
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    separatorLine: {
+                        separatorIndex: separatorIndex
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        color: '#d1d5db',
+                        font: {
+                            weight: 'bold',
+                            size: 11
+                        }
                     }
                 },
                 scales: {
@@ -360,6 +468,21 @@ class ReadingDashboard {
                         const year = years[index];
                         const uuid = this.getUuidFromUrl();
                         window.location.href = `books?uuid=${uuid}&type=pages-year&value=${year}`;
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        color: '#d1d5db',
+                        font: {
+                            weight: 'bold',
+                            size: 10
+                        },
+                        formatter: (value) => value >= 1000 ? Math.round(value / 1000) + 'k' : value
                     }
                 }
             }
@@ -622,6 +745,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const uuid = getUuidFromUrl();
             if (uuid) {
                 window.location.href = `books?uuid=${uuid}&type=all&value=all`;
+            }
+        });
+    }
+
+    // Handle Top Genres title click
+    const topGenresTitle = document.getElementById('topGenresTitle');
+    if (topGenresTitle) {
+        topGenresTitle.addEventListener('click', () => {
+            const uuid = getUuidFromUrl();
+            if (uuid) {
+                window.location.href = `genres?uuid=${uuid}`;
             }
         });
     }

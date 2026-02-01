@@ -52,6 +52,17 @@ def merge_and_normalize(google_genres: List[str], openlib_genres: List[str]) -> 
             # Skip date-like entries
             if clean_genre.isdigit() or clean_genre.endswith(" century"):
                 continue
+
+            # Skip format-based entries (not actual genres)
+            excluded_genres = {
+                "audiobook",
+                "audiobooks",
+                "audio book",
+                "audio books",
+                "audible",
+            }
+            if clean_genre.lower() in excluded_genres:
+                continue
             
             # Add to normalized set (case-insensitive deduplication)
             if clean_genre:
