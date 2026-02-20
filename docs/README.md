@@ -14,6 +14,8 @@ Welcome to the Goodreads Stats documentation. This guide will help you understan
 | [Genre Enrichment](genre-enrichment.md) | Genre pipeline and source strategy |
 | [Logging Strategy](logging-strategy.md) | Structured logging and CloudWatch queries |
 | [Troubleshooting](troubleshooting.md) | Common issues and solutions |
+| [Deployment](deployment.md) | AWS setup, CI/CD, and deployment guide |
+| [Coding Guidelines](coding-guidelines.md) | Code style and conventions |
 
 ## What is Goodreads Stats?
 

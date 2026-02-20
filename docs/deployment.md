@@ -18,7 +18,7 @@ The deployment uses **GitHub Actions** for CI/CD and **AWS CDK** for Infrastruct
 
 ### Required Tools (Local Approach)
 - **AWS CLI** (v2.0+)
-- **Node.js** (v18+) 
+- **Node.js** (v18+)
 - **Python** (3.11+)
 - **Git**
 - **jq** (for JSON parsing in GitHub Actions)
@@ -45,7 +45,7 @@ The deployment uses **GitHub Actions** for CI/CD and **AWS CDK** for Infrastruct
 # Only if you prefer local setup
 aws configure --profile personal
 # Enter your AWS Access Key ID
-# Enter your AWS Secret Access Key  
+# Enter your AWS Secret Access Key
 # Default region: us-east-1
 # Default output format: json
 ```
@@ -96,11 +96,11 @@ aws route53 create-hosted-zone \
 
 ```bash
 # Download the secure policy from your repository
-curl -o github-actions-policy.json https://raw.githubusercontent.com/CarsonDavis/goodreads_stats/refs/heads/master/github-actions-policy.json
+curl -o github-actions-policy.json https://raw.githubusercontent.com/CarsonDavis/goodreads_stats/refs/heads/master/cdk/github-actions-policy.json
 
 # Or if the repo is private, create the policy file manually:
 cat > github-actions-policy.json << 'EOF'
-# Copy the contents from github-actions-policy.json in your repository
+# Copy the contents from cdk/github-actions-policy.json in your repository
 EOF
 ```
 
@@ -127,9 +127,7 @@ aws iam attach-user-policy \
 aws iam create-access-key --user-name github-actions-goodreads-stats
 ```
 
-**📋 Copy the output** - you'll need `AccessKeyId` and `SecretAccessKey` for GitHub Secrets.
-
-**✅ Security Benefit:** No AWS credentials ever stored on your local machine!
+Copy the output - you'll need `AccessKeyId` and `SecretAccessKey` for GitHub Secrets.
 
 ---
 
@@ -150,15 +148,15 @@ Navigate to your GitHub repository → **Settings** → **Secrets and variables*
 
 1. Go to **Settings** → **Actions** → **General**
 2. Under **Workflow permissions**, select:
-   - ✅ **Read and write permissions**
-   - ✅ **Allow GitHub Actions to create and approve pull requests**
+   - **Read and write permissions**
+   - **Allow GitHub Actions to create and approve pull requests**
 
 ### 2.3 Branch Protection (Optional but Recommended)
 
 1. Go to **Settings** → **Branches**
 2. Add rule for `main` branch:
-   - ✅ **Require status checks to pass before merging**
-   - ✅ **Require branches to be up to date before merging**
+   - **Require status checks to pass before merging**
+   - **Require branches to be up to date before merging**
    - Add status check: `deploy-infrastructure`
 
 ---
@@ -263,7 +261,7 @@ aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Comm
 ### 4.2 Test the Application
 
 1. **Visit the website:** https://goodreads-stats.codebycarson.com
-2. **Test API endpoint:** 
+2. **Test API endpoint:**
    ```bash
    curl https://goodreads-stats.codebycarson.com/api/health
    ```
@@ -288,7 +286,7 @@ nslookup goodreads-stats.codebycarson.com
 - **Trigger:** Push to `main` or `master` branch
 - **Domain:** `goodreads-stats.codebycarson.com`
 - **Stack Prefix:** `GoodreadsStats-Prod-*`
-- **S3 Buckets:** 
+- **S3 Buckets:**
   - Data: `goodreads-stats`
   - Website: `goodreads-stats-website-prod`
 
@@ -321,7 +319,7 @@ Use workflow dispatch to override automatic environment detection:
 # Upload handler logs
 aws logs tail /aws/lambda/GoodreadsStats-Prod-Api-UploadHandler --follow
 
-# Orchestrator logs  
+# Orchestrator logs
 aws logs tail /aws/lambda/GoodreadsStats-Prod-Api-Orchestrator --follow
 
 # Status checker logs
@@ -427,7 +425,7 @@ cd cdk
 cdk destroy --all --context environment=prod
 ```
 
-⚠️ **Warning:** This will delete all data and resources!
+**Warning:** This will delete all data and resources!
 
 ---
 
@@ -435,24 +433,24 @@ cdk destroy --all --context environment=prod
 
 ### 8.1 Access Control
 
-- ✅ **Principle of least privilege** - IAM user has minimal required permissions
-- ✅ **No hardcoded secrets** - All sensitive data in GitHub Secrets
-- ✅ **HTTPS only** - CloudFront redirects HTTP to HTTPS
-- ✅ **CORS restrictions** - API only accepts requests from allowed domains
+- **Principle of least privilege** - IAM user has minimal required permissions
+- **No hardcoded secrets** - All sensitive data in GitHub Secrets
+- **HTTPS only** - CloudFront redirects HTTP to HTTPS
+- **CORS restrictions** - API only accepts requests from allowed domains
 
 ### 8.2 Data Protection
 
-- ✅ **Temporary storage** - CSV uploads deleted after processing
-- ✅ **Public dashboard data** - Only processed JSONs are publicly readable
-- ✅ **User-controlled deletion** - UUID-based data removal
-- ✅ **No PII logging** - Logs don't contain user data
+- **Temporary storage** - CSV uploads deleted after processing
+- **Public dashboard data** - Only processed JSONs are publicly readable
+- **User-controlled deletion** - UUID-based data removal
+- **No PII logging** - Logs don't contain user data
 
 ### 8.3 Cost Protection
 
-- ✅ **Lifecycle policies** - Automatic cleanup of old data
-- ✅ **Serverless scaling** - Pay per request
-- ✅ **CloudWatch monitoring** - Track usage and costs
-- ✅ **Free tier usage** - Optimized for AWS free tier
+- **Lifecycle policies** - Automatic cleanup of old data
+- **Serverless scaling** - Pay per request
+- **CloudWatch monitoring** - Track usage and costs
+- **Free tier usage** - Optimized for AWS free tier
 
 ---
 
@@ -502,7 +500,3 @@ For deployment issues:
 2. Review AWS CloudFormation events
 3. Monitor CloudWatch logs for Lambda functions
 4. Verify DNS and SSL certificate status
-
----
-
-**🎉 Your Goodreads Stats application is now ready for production!**
