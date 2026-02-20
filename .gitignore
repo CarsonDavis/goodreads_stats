@@ -206,10 +206,8 @@ ehthumbs_vista.db
 config.ini
 secrets.json
 
-# Data files (if sensitive)
-# Uncomment if your data files contain sensitive information
-# data/
-# *.csv
+# Data files (user exports)
+data/*.csv
 
 # Results and output files
 results/

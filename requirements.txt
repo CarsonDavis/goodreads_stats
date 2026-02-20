@@ -1,0 +1,24 @@
+# Local Docker Development Dependencies
+# Used by Dockerfile for local FastAPI server
+
+# Core FastAPI dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Async HTTP client
+aiohttp==3.9.1
+
+# Data processing
+pandas==2.1.4
+numpy>=1.24.4
+
+# Utilities
+python-dateutil==2.8.2
+
+# AWS SDK (for local testing)
+boto3>=1.26.0
+
+# HTML parsing (for Goodreads scraping)
+beautifulsoup4>=4.12.0
+lxml>=5.0.0

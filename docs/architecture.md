@@ -176,6 +176,74 @@ Located in `cdk/lambda_code/`:
 | `aggregator` | CloudWatch Events | Combines results, generates dashboard JSON |
 | `status_checker` | API Gateway GET | Returns processing status |
 
+## Cloud Pipeline Details
+
+Each Lambda function in the cloud pipeline has specific resource allocations, data transformations, and failure modes.
+
+### Upload Handler
+- **File:** `cdk/lambda_code/upload_handler/lambda_function.py`
+- **Memory:** 512MB | **Timeout:** 2 minutes
+- **Processing:** Validates CSV (max 50MB), generates UUID, parses multipart form data
+- **S3 Writes:** `uploads/{uuid}/raw.csv`, `uploads/{uuid}/metadata.json`, `status/{uuid}.json`
+- **Output:** Asynchronously invokes Orchestrator Lambda
+
+### Orchestrator
+- **File:** `cdk/lambda_code/orchestrator/lambda_function.py`
+- **Memory:** 512MB | **Timeout:** 5 minutes
+- **Processing:** Downloads CSV from S3, parses with `AnalyticsCSVProcessor`, converts to `BookInfo` objects, sends individual SQS messages (batches of 10)
+- **S3 Writes:** `processing/{uuid}/original_books.json` (parsed books for aggregation)
+- **SQS Message Format:**
+  ```json
+  {
+    "book": {"title": "...", "author": "...", "isbn13": "...", "goodreads_id": "..."},
+    "processing_uuid": "...",
+    "bucket": "...",
+    "original_books_s3_key": "processing/{uuid}/original_books.json"
+  }
+  ```
+
+### Book Processor
+- **File:** `cdk/lambda_code/book_processor/lambda_function.py`
+- **Memory:** 256MB | **Timeout:** 60 seconds
+- **Trigger:** SQS with batch size of 1
+- **Processing:** Runs `AsyncGenreEnricher` with `max_concurrent=1` for the single book
+- **S3 Writes:** `processing/{uuid}/enriched/{isbn}_{title}.json`
+- **API Rate Limits:** Google Books (1000/day, 100/100s), Open Library (~100/min)
+
+### Aggregator
+- **File:** `cdk/lambda_code/aggregator/lambda_function.py`
+- **Memory:** 512MB | **Timeout:** 5 minutes
+- **Trigger:** CloudWatch Events (every 60 seconds)
+- **Processing:** Lists processing directories, checks completion (enriched file count >= expected), merges enriched results back into `BookAnalytics`, calls `create_dashboard_json()`
+- **Completion Criteria:** Status is "processing", `original_books.json` exists, enriched file count >= expected book count
+- **S3 Writes:** `data/{uuid}.json` (final dashboard), updates `status/{uuid}.json` to "complete"
+
+### Status Checker
+- **File:** `cdk/lambda_code/status_checker/lambda_function.py`
+- **Memory:** 256MB | **Timeout:** 30 seconds
+- **Routes:** `GET /api/status/{uuid}`, `GET /api/data/{uuid}`, `DELETE /api/data/{uuid}`
+
+### Fault Tolerance
+
+The pipeline uses a multi-checkpoint architecture:
+
+| Failure | Recovery |
+|---------|----------|
+| Orchestrator crash | Status remains "processing", can be re-triggered |
+| BookProcessor timeout | SQS message returns to queue for retry (3 attempts, then DLQ) |
+| Aggregator miss | Periodic checks will detect and aggregate on next cycle |
+| API failure | Graceful degradation — partial genre results stored |
+
+### Scaling Limits
+
+| Resource | Limit |
+|----------|-------|
+| Lambda concurrency | 1000 concurrent (default) |
+| Lambda `/tmp` | 10GB |
+| API Gateway payload | 10MB |
+| SQS throughput | 300 transactions/second (standard queue) |
+| S3 PUT rate | 3,500 requests/second per prefix |
+
 ## Frontend Architecture
 
 ### File Structure

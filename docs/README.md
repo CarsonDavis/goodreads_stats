@@ -12,6 +12,7 @@ Welcome to the Goodreads Stats documentation. This guide will help you understan
 | [API Reference](api-reference.md) | REST endpoint documentation |
 | [Lambda Functions](lambda-functions.md) | AWS Lambda handler details |
 | [Genre Enrichment](genre-enrichment.md) | Genre pipeline and source strategy |
+| [Logging Strategy](logging-strategy.md) | Structured logging and CloudWatch queries |
 | [Troubleshooting](troubleshooting.md) | Common issues and solutions |
 
 ## What is Goodreads Stats?

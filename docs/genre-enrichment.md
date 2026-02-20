@@ -144,6 +144,37 @@ Open Library: 4 subjects
 Final: 6 merged genres (API fallback)
 ```
 
+## Standalone Scraper Usage
+
+The Goodreads scraping logic originated from a separate `book-recommendations` repository and can also be used standalone for batch genre lookups:
+
+```bash
+# From the book-recommendations repo
+uv run python -m goodreads genres input.csv output.csv --concurrency 5 --retry 3
+```
+
+**Python API (single book):**
+```python
+import asyncio
+import aiohttp
+from goodreads.scrape import fetch_genres
+
+async def get_genres(book_id: str):
+    timeout = aiohttp.ClientTimeout(total=30)
+    headers = {"User-Agent": "Mozilla/5.0 ..."}
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+        return await fetch_genres(session, book_id)
+
+genres = asyncio.run(get_genres("123456"))
+# ["Fiction", "Mystery", "Thriller"]
+```
+
+**Input/Output:** CSV with `goodreads_id` column; output adds pipe-separated `genres` column.
+
+**Dependencies:** `aiohttp`, `beautifulsoup4`, `lxml`, `tqdm`
+
+Within the goodreads_stats pipeline, this logic is integrated directly in `genres/sources/goodreads.py` and called by the `AsyncGenreEnricher`.
+
 ## Configuration
 
 The `AsyncGenreEnricher` class accepts these parameters:
