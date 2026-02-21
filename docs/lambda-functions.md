@@ -454,8 +454,8 @@ aws logs filter-log-events \
 
 | Function | Timeout | Memory |
 |----------|---------|--------|
-| Upload Handler | 30s | 256 MB |
+| Upload Handler | 120s (2 min) | 512 MB |
 | Orchestrator | 300s (5 min) | 512 MB |
-| Book Processor | 60s | 512 MB |
-| Aggregator | 300s (5 min) | 1024 MB |
+| Book Processor | 60s | 256 MB |
+| Aggregator | 300s (5 min) | 512 MB |
 | Status Checker | 30s | 256 MB |

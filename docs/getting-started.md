@@ -84,17 +84,17 @@ Internal navigation links will break. For proper routing, use Docker Compose.
 
 ## Running the Pipeline Manually
 
-For development or testing, you can run the enrichment pipeline directly:
+For development or testing, use Docker Compose or the local server directly:
 
 ```bash
-# Process a CSV file and generate dashboard JSON
-uv run python run_smart_pipeline.py
+# Option 1: Docker Compose (recommended)
+docker compose up
 
-# Or with a specific CSV file
-uv run python run_smart_pipeline.py --csv data/goodreads_library_export.csv
+# Option 2: Run the FastAPI server directly
+uv run python local_server.py
 ```
 
-The output will be saved to `dashboard_data/{uuid}.json`.
+Then upload your CSV at `http://localhost:8000`. The output will be saved to `dashboard_data/{uuid}.json`.
 
 ## Project Structure
 

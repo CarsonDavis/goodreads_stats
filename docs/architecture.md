@@ -66,7 +66,7 @@ Goodreads Stats is a data processing pipeline that transforms Goodreads CSV expo
 4. Books converted to BookInfo objects
                     │
                     v
-5. EnvironmentAwareBookPipeline enriches books
+5. AsyncGenreEnricher enriches books
    ├── Goodreads scraping (primary)
    └── Google Books + Open Library APIs (fallback)
                     │
@@ -129,10 +129,7 @@ Located in `genres/` directory, used by both local and cloud modes:
 - **Output:** List of analytics-ready book objects
 
 #### Genre Enrichment (`genres/pipeline/enricher.py`)
-- **Classes:**
-  - `AsyncGenreEnricher` - Core async enricher with rate limiting and concurrency control
-  - `AdaptiveGenreEnricher` - Environment-adaptive wrapper (local async vs Lambda swarm)
-  - `EnvironmentAwareBookPipeline` - Top-level interface used by `local_server.py` and Lambda
+- **Class:** `AsyncGenreEnricher` - Core async enricher with rate limiting and concurrency control
 - **Genre Source Strategy:**
   - **Goodreads scraping:** Primary source — best quality, community-curated genres
   - **Google Books + Open Library APIs:** Parallel fallback when scraping fails

@@ -111,12 +111,6 @@ uv run python local_server.py
 # API docs: http://localhost:8001/docs
 ```
 
-### Run Pipeline Manually
-
-```bash
-uv run python run_smart_pipeline.py --csv data/your_export.csv
-```
-
 ## License
 
 MIT

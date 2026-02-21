@@ -325,7 +325,7 @@ List[BookAnalytics]  (initial, without genres)
 [Convert to BookInfo for API lookups]
      |
      v
-[EnvironmentAwareBookPipeline → AdaptiveGenreEnricher → AsyncGenreEnricher]
+[AsyncGenreEnricher]
      |
      v
 List[EnrichedBook]  (with API responses)

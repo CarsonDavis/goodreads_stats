@@ -1,97 +1,49 @@
-# Book Data Enrichment Pipeline
+# Book Genre Enrichment Pipeline
 
-A modular system that enriches Goodreads export data with genre information from Google Books and Open Library APIs.
+Async pipeline that enriches Goodreads export data with genre information from Goodreads scraping, Google Books, and Open Library APIs.
 
-## Clean Architecture
+## Architecture
 
-The pipeline has three main components with clear separation of concerns:
-
-- **`GenreEnricher`** - Core single-book enrichment (primary interface)
-- **`CSVProcessor`** - Handles CSV loading and data cleaning
-- **`BookFeeder`** - Orchestrates batch processing (ready for async/parallel)
+```
+genres/
+├── models/
+│   ├── book.py           # BookInfo (input) and EnrichedBook (output)
+│   └── analytics.py      # BookAnalytics and ReadingSession for dashboards
+├── pipeline/
+│   ├── csv_loader.py     # AnalyticsCSVProcessor — parses Goodreads CSV
+│   ├── enricher.py       # AsyncGenreEnricher — concurrent genre lookups
+│   └── exporter.py       # create_dashboard_json() — final JSON output
+├── sources/
+│   ├── goodreads.py      # Goodreads scraping (primary genre source)
+│   ├── google.py         # Google Books API processor
+│   └── openlibrary.py    # Open Library API processor
+└── utils/                # Genre merging and normalization
+```
 
 ## Quick Start
 
-### Single Book Enrichment
 ```python
-from genres import GenreEnricher, BookInfo
+from genres import AsyncGenreEnricher, BookInfo
 
-# Create a book
-book = BookInfo(
-    title="The Great Gatsby",
-    author="F. Scott Fitzgerald", 
-    isbn13="9780743273565"
-)
+books = [
+    BookInfo(title="The Great Gatsby", author="F. Scott Fitzgerald", isbn13="9780743273565"),
+]
 
-# Enrich it
-enricher = GenreEnricher(rate_limit=1.0)
-enriched_book = enricher.enrich_book(book)
+async with AsyncGenreEnricher(max_concurrent=15, rate_limit_delay=0.05) as enricher:
+    enriched = await enricher.enrich_books_batch(books)
 
-print(f"Final genres: {enriched_book.final_genres}")
+print(enriched[0].final_genres)
 ```
 
-### CSV Batch Processing
-```python
-from genres import GenreEnricher, CSVProcessor, BookFeeder
+## Genre Source Strategy
 
-# Load books from CSV
-csv_processor = CSVProcessor()
-books = csv_processor.load_books("goodreads_export.csv", sample_size=10)
+1. **Goodreads scraping** (primary) — community-curated genres, best quality
+2. **Google Books + Open Library APIs** (fallback) — used when scraping fails, fetched in parallel
 
-# Process them
-enricher = GenreEnricher(rate_limit=1.0)
-feeder = BookFeeder(enricher)
-enriched_books = feeder.process_books(books)
-```
+## Key Classes
 
-## Features
-
-- **Resilient API calls** with rate limiting, retries, and exponential backoff
-- **Dual data sources** combining Google Books and Open Library for maximum coverage
-- **Smart query strategies** using ISBN first, then falling back to title+author
-- **Genre normalization** and deduplication across sources
-- **Comprehensive reporting** with detailed analysis and overlap statistics
-- **Modular architecture** for easy extension to additional data sources
-
-## Key Components
-
-- **`BookDataOrchestrator`** - Main pipeline coordinator
-- **`APICaller`** - Handles all HTTP requests with resilience features
-- **Fetchers** - API-specific data retrieval (`google_fetcher`, `open_library_fetcher`)
-- **Processors** - Extract and clean data from API responses
-- **`GenreMerger`** - Combines and normalizes genre data
-- **`EnrichedBook`** - Central data model tracking enrichment progress
-
-## Configuration
-
-Adjust rate limiting for API calls:
-```python
-enricher = GenreEnricher(rate_limit=0.5)  # 0.5 seconds between requests
-```
-
-Process a subset of books:
-```python
-books = csv_processor.load_books(csv_path, sample_size=50)
-enriched_books = feeder.process_books(books, max_books=25)
-```
-
-## Output
-
-The pipeline generates:
-- **CSV file** with enriched book data and final genre lists
-- **JSON report** with pipeline performance statistics
-- **Console displays** showing coverage, overlap analysis, and top genres
-
-## Architecture Benefits
-
-- **Single Responsibility**: Each component has one clear purpose
-- **Easy Testing**: Components can be tested independently  
-- **Async Ready**: Architecture supports future parallel processing
-- **Extensible**: Easy to add new data sources or processing steps
-
-```python
-# Future: Parallel API calls for better performance
-# enriched_book = await enricher.enrich_book_async(book)
-```
-
-Perfect for book lovers wanting to analyze and categorize their reading habits with reliable, comprehensive genre data.
+- **`AsyncGenreEnricher`** — Core enricher with semaphore-based concurrency control and rate limiting
+- **`AnalyticsCSVProcessor`** — Loads books from Goodreads CSV exports into `BookAnalytics` objects
+- **`BookInfo`** / **`EnrichedBook`** — Input/output data models for the enrichment pipeline
+- **`BookAnalytics`** — Enhanced book model with reading sessions and time-series data
+- **`create_dashboard_json()`** — Generates the final dashboard JSON from enriched books

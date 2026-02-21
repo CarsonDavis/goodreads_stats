@@ -12,30 +12,16 @@ A beautiful, modern dashboard built with vanilla JavaScript to visualize your Go
 
 ## Local Development
 
-1. **Generate your data**:
+1. **Start via Docker Compose** (recommended):
    ```bash
-   python create_dashboard_json.py
+   docker compose up
    ```
-   This creates a JSON file in `dashboard_data/`
+   This starts both the frontend (`:8000`) and the FastAPI backend (`local_server.py` on `:8001`).
 
-2. **Start a local server**:
-   ```bash
-   # Option 1: Python
-   python -m http.server 8000
-   
-   # Option 2: Node.js
-   npx serve .
-   
-   # Option 3: VS Code Live Server extension
-   ```
+2. **Upload your CSV** at `http://localhost:8000` — the pipeline processes it and generates dashboard JSON automatically.
 
-3. **Open dashboard**:
+3. **View dashboard**:
    ```
-   http://localhost:8000/
-   ```
-   
-   Then navigate to dashboard with a UUID:
-   ```  
    http://localhost:8000/dashboard?uuid={your-uuid}
    ```
 

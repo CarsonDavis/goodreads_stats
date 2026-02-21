@@ -62,7 +62,7 @@ def main():
     
     if not latest_file:
         print("❌ No JSON files found in dashboard_data/")
-        print("💡 Generate data first: python create_dashboard_json.py")
+        print("💡 Generate data first via Docker or local_server.py")
         return
     
     # Extract UUID
