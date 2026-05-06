@@ -2,6 +2,7 @@ from aws_cdk import (
     Stack,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
+    aws_iam as iam,
     aws_route53 as route53,
     aws_route53_targets as targets,
     aws_certificatemanager as acm,
@@ -9,6 +10,10 @@ from aws_cdk import (
     CfnOutput
 )
 from constructs import Construct
+
+GITHUB_ORG = "CarsonDavis"
+GITHUB_REPO = "goodreads_stats"
+
 
 class FrontendStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, api_stack, storage_stack, deployment_env: str, **kwargs) -> None:
@@ -141,4 +146,73 @@ class FrontendStack(Stack):
             self, "ApiUrl",
             value=f"https://{domain_name}/api",
             description="API URL via CloudFront"
+        )
+
+        # ── GitHub Actions deploy role (OIDC) ─────────────────────────
+        # Replaces the long-lived github-actions-goodreads-stats IAM-user
+        # access keys this repo used to ship deploys with. Trust is bound
+        # to this repo via the OIDC `sub` claim; permissions are tight.
+        oidc_provider = iam.OpenIdConnectProvider.from_open_id_connect_provider_arn(
+            self,
+            "GitHubOidc",
+            f"arn:aws:iam::{self.account}:oidc-provider/token.actions.githubusercontent.com",
+        )
+        deploy_role = iam.Role(
+            self,
+            "GitHubActionsDeployRole",
+            assumed_by=iam.FederatedPrincipal(
+                oidc_provider.open_id_connect_provider_arn,
+                conditions={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub": f"repo:{GITHUB_ORG}/{GITHUB_REPO}:*",
+                    },
+                },
+                assume_role_action="sts:AssumeRoleWithWebIdentity",
+            ),
+            description="Role assumed by GitHub Actions for goodreads_stats deploys",
+        )
+
+        # Direct grants for the post-CDK steps in deploy.yml.
+        # `aws s3 sync dashboard/ s3://<website-bucket>/ --delete` and
+        # `aws s3 cp dashboard_data/... s3://<data-bucket>/data/...` both
+        # need read/write/delete on the respective buckets.
+        storage_stack.website_bucket.grant_read_write(deploy_role)
+        storage_stack.website_bucket.grant_delete(deploy_role)
+        storage_stack.data_bucket.grant_read_write(deploy_role)
+        storage_stack.data_bucket.grant_delete(deploy_role)
+
+        deploy_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudfront:CreateInvalidation"],
+                resources=[
+                    f"arn:aws:cloudfront::{self.account}:distribution/{self.distribution.distribution_id}"
+                ],
+            )
+        )
+
+        # CDK deploy from CI: assume the bootstrap roles. Modern CDK
+        # delegates all CloudFormation/IAM/asset-upload work to those.
+        cdk_qualifier = "hnb659fds"
+        cdk_role_arns = [
+            f"arn:aws:iam::{self.account}:role/cdk-{cdk_qualifier}-{purpose}-{self.account}-{self.region}"
+            for purpose in (
+                "deploy-role",
+                "file-publishing-role",
+                "lookup-role",
+            )
+        ]
+        deploy_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["sts:AssumeRole"],
+                resources=cdk_role_arns,
+            )
+        )
+
+        CfnOutput(
+            self, "GitHubActionsDeployRoleArn",
+            value=deploy_role.role_arn,
+            description="ARN to set as the AWS_DEPLOY_ROLE_ARN repo secret"
         )
